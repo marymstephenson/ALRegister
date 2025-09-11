@@ -180,21 +180,17 @@
         // --- Global Variables (provided by the environment) ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        // Note: The Firebase config is provided by the environment. If you're running this locally, you'll need to
-        // replace the next line with your actual Firebase config object to connect to your database.
-        // Example: const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", ... };
         const canvasFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         
         // PASTE YOUR FIREBASE CONFIG HERE to bring the app online
         const localFirebaseConfig = {
             // Your config object should look something like this:
-            apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
-            authDomain: "althespiansregister.firebaseapp.com",
-            projectId: "althespiansregister",
-            storageBucket: "althespiansregister.firebasestorage.app",
-            messagingSenderId: "661975262277",
-            appId: "1:661975262277:web:96341da8613be1a9746f2c"
+            // apiKey: "...",
+            // authDomain: "...",
+            // projectId: "...",
+            // storageBucket: "...",
+            // messagingSenderId: "...",
+            // appId: "..."
         };
 
         let app, db, auth;
@@ -447,10 +443,18 @@
             registerView.classList.add('hidden');
             salesView.classList.add('hidden');
 
-            try {
-                // Use the config from the Canvas environment, or the local one if available.
-                const firebaseConfig = canvasFirebaseConfig || localFirebaseConfig;
+            const firebaseConfig = canvasFirebaseConfig || localFirebaseConfig;
+            
+            // Set a timeout to proceed in offline mode if online initialization takes too long
+            const timeoutId = setTimeout(() => {
+                if (!app) {
+                    console.warn("Authentication timed out. Running in offline mode.");
+                    loadingState.classList.add('hidden');
+                    registerView.classList.remove('hidden');
+                }
+            }, 5000); // 5-second timeout
 
+            try {
                 if (firebaseConfig && Object.keys(firebaseConfig).length > 0) {
                     app = initializeApp(firebaseConfig);
                     auth = getAuth(app);
@@ -458,6 +462,7 @@
                     setLogLevel('debug');
                 
                     onAuthStateChanged(auth, async (user) => {
+                        clearTimeout(timeoutId);
                         if (user) {
                             userId = user.uid;
                             renderProducts();
@@ -465,12 +470,18 @@
                             loadingState.classList.add('hidden');
                             registerView.classList.remove('hidden');
                         } else if (initialAuthToken) {
-                            await signInWithCustomToken(auth, initialAuthToken);
+                            try {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } catch (e) {
+                                console.error("Error signing in with custom token:", e);
+                                await signInAnonymously(auth);
+                            }
                         } else {
                             await signInAnonymously(auth);
                         }
                     });
                 } else {
+                    clearTimeout(timeoutId);
                     // Running in offline mode
                     userId = 'local-user';
                     renderProducts();
@@ -479,6 +490,7 @@
                     registerView.classList.remove('hidden');
                 }
             } catch (e) {
+                clearTimeout(timeoutId);
                 console.error("Failed to initialize the app:", e);
                 loadingState.classList.add('hidden');
                 errorState.classList.remove('hidden');

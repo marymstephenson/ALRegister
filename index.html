@@ -92,7 +92,7 @@
     <!-- Main Content Container -->
     <div id="app-container" class="container mx-auto p-4 flex-grow flex flex-col items-center justify-center">
         <!-- Loading and Error State -->
-        <div id="loading-state" class="text-center text-navy text-xl font-bold hidden">
+        <div id="loading-state" class="text-center text-navy text-xl font-bold">
             <div class="flex items-center justify-center space-x-2">
                 <div class="w-4 h-4 rounded-full bg-navy animate-bounce"></div>
                 <div class="w-4 h-4 rounded-full bg-navy animate-bounce" style="animation-delay: -0.1s"></div>
@@ -187,7 +187,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, orderBy, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Global Variables (provided by the environment) ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -293,10 +293,9 @@
 
         function updateCartDisplay() {
             cartListEl.innerHTML = '';
-            const tempCart = [...currentCart];
             
-            for (let i = 0; i < tempCart.length; i++) {
-                const item = tempCart[i];
+            for (let i = 0; i < currentCart.length; i++) {
+                const item = currentCart[i];
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center cart-item';
                 div.innerHTML = `
@@ -325,7 +324,7 @@
                 return;
             }
 
-            if (!isOnline) {
+            if (!db) {
                 showMessage("Offline mode: Sale not saved to database.");
                 currentCart = [];
                 currentTotal = 0;
@@ -339,9 +338,9 @@
                     items: JSON.stringify(currentCart),
                     date: new Date().toISOString()
                 };
-                await addDoc(collection(db, 'artifacts', appId, 'public/data', 'transactions'), newTransaction);
+                await addDoc(collection(db, `artifacts/${appId}/public/data/transactions`), newTransaction);
                 
-                const salesRef = doc(db, 'artifacts', appId, 'public/data', 'salesData');
+                const salesRef = doc(db, `artifacts/${appId}/public/data/salesData`);
                 const salesSnap = await getDoc(salesRef);
                 let salesData = salesSnap.exists() ? salesSnap.data() : { totalRevenue: 0, totalTransactions: 0 };
                 
@@ -368,7 +367,7 @@
             }
             noDbState.classList.add('hidden');
             
-            const salesRef = doc(db, 'artifacts', appId, 'public/data', 'salesData');
+            const salesRef = doc(db, `artifacts/${appId}/public/data/salesData`);
             onSnapshot(salesRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -380,16 +379,15 @@
                 }
             }, (error) => {
                 console.error("Error listening to sales data:", error);
-                showMessage("Failed to connect to the database. Please check your network connection.");
             });
 
-            const transactionsRef = collection(db, 'artifacts', appId, 'public/data', 'transactions');
-            onSnapshot(query(transactionsRef), (snapshot) => {
+            const transactionsRef = collection(db, `artifacts/${appId}/public/data/transactions`);
+            onSnapshot(query(transactionsRef, orderBy('date')), (snapshot) => {
                 const history = [];
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     history.push({
-                        date: new Date(data.date).toLocaleString(),
+                        date: data.date ? new Date(data.date).toLocaleString() : 'N/A',
                         total: data.total,
                         items: JSON.parse(data.items)
                     });
@@ -430,16 +428,9 @@
         }
 
         // --- Event Listeners ---
-        window.addEventListener('load', () => {
-            // Hide loading and show the correct view
-            loadingState.classList.add('hidden');
-            showView(registerView);
-        });
-        
         modalCloseBtn.addEventListener('click', () => {
             modalContainer.classList.add('hidden');
         });
-
         hamburgerBtn.addEventListener('click', toggleNav);
         navOverlay.addEventListener('click', toggleNav);
         registerLink.addEventListener('click', (e) => {
@@ -453,10 +444,13 @@
         completeSaleBtn.addEventListener('click', completeSale);
         
         // --- Main App Initialization ---
-        async function initializeApp() {
+        async function initApp() {
             loadingState.classList.remove('hidden');
+            registerView.classList.add('hidden');
+            salesView.classList.add('hidden');
+
             try {
-                if (firebaseConfig && firebaseConfig.projectId && firebaseConfig.projectId !== "dummy-project-id") {
+                if (firebaseConfig && Object.keys(firebaseConfig).length > 0) {
                     isOnline = true;
                     app = initializeApp(firebaseConfig);
                     auth = getAuth(app);
@@ -467,30 +461,32 @@
                     console.warn("Firebase config not found. Running in offline mode. Sales data will not be persisted.");
                 }
 
-                // Auth state listener to handle both initial sign-in and subsequent state changes
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        appIdEl.textContent = appId;
-                        userIdEl.textContent = userId;
-                        renderProducts();
-                        setupSalesDataListener();
-                        loadingState.classList.add('hidden');
-                    } else if (initialAuthToken && isOnline) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                    } else if (isOnline) {
-                        await signInAnonymously(auth);
-                    } else {
-                        // Offline mode
-                        userId = 'local-user';
-                        appIdEl.textContent = appId;
-                        userIdEl.textContent = userId;
-                        renderProducts();
-                        setupSalesDataListener();
-                        loadingState.classList.add('hidden');
-                    }
-                });
-
+                if (isOnline) {
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            appIdEl.textContent = appId;
+                            userIdEl.textContent = userId;
+                            renderProducts();
+                            setupSalesDataListener();
+                            loadingState.classList.add('hidden');
+                            registerView.classList.remove('hidden');
+                        } else if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    });
+                } else {
+                    userId = 'local-user';
+                    appIdEl.textContent = appId;
+                    userIdEl.textContent = userId;
+                    renderProducts();
+                    setupSalesDataListener();
+                    loadingState.classList.add('hidden');
+                    noDbState.classList.remove('hidden');
+                    registerView.classList.remove('hidden');
+                }
             } catch (e) {
                 console.error("Failed to initialize the app:", e);
                 loadingState.classList.add('hidden');
@@ -499,7 +495,7 @@
             }
         }
         
-        initializeApp();
+        initApp();
     </script>
 </body>
 </html>

@@ -101,15 +101,11 @@
             <p class="mt-4">Initializing...</p>
         </div>
         <div id="error-state" class="text-center text-red-500 text-xl font-bold hidden">There was an error. Check the console for details.</div>
-        <div id="no-db-state" class="text-center text-gray-500 text-lg font-bold hidden p-4 rounded-lg border-2 border-dashed border-gray-400">
-            <p>Database not connected. Running in offline mode.</p>
-            <p class="text-sm font-normal">Sales data will not be saved when the page is reloaded.</p>
-        </div>
 
         <!-- Register View -->
         <div id="register-view" class="w-full max-w-5xl flex flex-col lg:flex-row gap-8 hidden animate-fade-in">
             <!-- Products & Register Section -->
-            <div class="lg:w-3/5 w-full flex flex-col space-y-8">
+            <div class="lg:w-full w-full flex flex-col space-y-8">
                 <h2 class="text-3xl font-bold text-center">Register</h2>
                 
                 <!-- Products Grid -->
@@ -127,14 +123,6 @@
                         Total: <span id="current-total">$0.00</span>
                     </div>
                     <button id="complete-sale-btn" class="w-full mt-4 bg-gold text-navy font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors shadow-md">Complete Sale</button>
-                </div>
-            </div>
-            
-            <!-- Auth Info for Debugging -->
-            <div class="lg:w-2/5 w-full flex flex-col space-y-8">
-                <div class="bg-gray-100 text-gray-700 p-4 rounded-lg text-sm" id="auth-info-container">
-                    <p><strong>App ID:</strong> <span id="app-id"></span></p>
-                    <p><strong>User ID:</strong> <span id="user-id"></span></p>
                 </div>
             </div>
         </div>
@@ -187,22 +175,32 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, orderBy, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Global Variables (provided by the environment) ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Note: The Firebase config is provided by the environment. If you're running this locally, you'll need to
+        // replace the next line with your actual Firebase config object to connect to your database.
+        // Example: const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", ... };
+        const canvasFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        
+        // PASTE YOUR FIREBASE CONFIG HERE to bring the app online
+        const localFirebaseConfig = {
+            // Your config object should look something like this:
+            apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
+            authDomain: "althespiansregister.firebaseapp.com",
+            projectId: "althespiansregister",
+            storageBucket: "althespiansregister.firebasestorage.app",
+            messagingSenderId: "661975262277",
+            appId: "1:661975262277:web:96341da8613be1a9746f2c"
+        };
 
         let app, db, auth;
         let userId = 'unknown';
-        let isOnline = false;
         
         // --- DOM Elements ---
-        const authInfoContainer = document.getElementById('auth-info-container');
-        const appIdEl = document.getElementById('app-id');
-        const userIdEl = document.getElementById('user-id');
-        const noDbState = document.getElementById('no-db-state');
         const productListEl = document.getElementById('product-list');
         const cartListEl = document.getElementById('cart-list');
         const currentTotalEl = document.getElementById('current-total');
@@ -361,11 +359,9 @@
         }
 
         function setupSalesDataListener() {
-            if (!isOnline) {
-                noDbState.classList.remove('hidden');
+            if (!db) {
                 return;
             }
-            noDbState.classList.add('hidden');
             
             const salesRef = doc(db, `artifacts/${appId}/public/data/salesData`);
             onSnapshot(salesRef, (docSnap) => {
@@ -382,7 +378,7 @@
             });
 
             const transactionsRef = collection(db, `artifacts/${appId}/public/data/transactions`);
-            onSnapshot(query(transactionsRef, orderBy('date')), (snapshot) => {
+            onSnapshot(transactionsRef, (snapshot) => {
                 const history = [];
                 snapshot.forEach(doc => {
                     const data = doc.data();
@@ -392,6 +388,8 @@
                         items: JSON.parse(data.items)
                     });
                 });
+                // Sort by date in descending order (newest first)
+                history.sort((a, b) => new Date(b.date) - new Date(a.date));
                 renderTransactionTable(history);
             }, (error) => {
                 console.error("Error listening to transaction history:", error);
@@ -450,23 +448,18 @@
             salesView.classList.add('hidden');
 
             try {
+                // Use the config from the Canvas environment, or the local one if available.
+                const firebaseConfig = canvasFirebaseConfig || localFirebaseConfig;
+
                 if (firebaseConfig && Object.keys(firebaseConfig).length > 0) {
-                    isOnline = true;
                     app = initializeApp(firebaseConfig);
                     auth = getAuth(app);
                     db = getFirestore(app);
                     setLogLevel('debug');
-                } else {
-                    isOnline = false;
-                    console.warn("Firebase config not found. Running in offline mode. Sales data will not be persisted.");
-                }
-
-                if (isOnline) {
+                
                     onAuthStateChanged(auth, async (user) => {
                         if (user) {
                             userId = user.uid;
-                            appIdEl.textContent = appId;
-                            userIdEl.textContent = userId;
                             renderProducts();
                             setupSalesDataListener();
                             loadingState.classList.add('hidden');
@@ -478,13 +471,11 @@
                         }
                     });
                 } else {
+                    // Running in offline mode
                     userId = 'local-user';
-                    appIdEl.textContent = appId;
-                    userIdEl.textContent = userId;
                     renderProducts();
-                    setupSalesDataListener();
+                    console.warn("Firebase config not found. Running in offline mode. Sales data will not be persisted.");
                     loadingState.classList.add('hidden');
-                    noDbState.classList.remove('hidden');
                     registerView.classList.remove('hidden');
                 }
             } catch (e) {

@@ -193,32 +193,37 @@
         // --- Firebase Initialization ---
         setLogLevel('debug');
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // Add a fallback config for local development
+
+        // START OF FIREBASE CONFIGURATION
+
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
             authDomain: "althespiansregister.firebaseapp.com",
             projectId: "althespiansregister",
             storageBucket: "althespiansregister.firebasestorage.app",
             messagingSenderId: "661975262277",
-            appId: "1:661975262277:web:c060baba1a7e4bfa746f2c"
+            appId: "1:661975262277:web:96341da8613be1a9746f2c"
         };
-        // Import the functions you need from the SDKs you need
-    import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
-  authDomain: "althespiansregister.firebaseapp.com",
-  projectId: "althespiansregister",
-  storageBucket: "althespiansregister.firebasestorage.app",
-  messagingSenderId: "661975262277",
-  appId: "1:661975262277:web:c060baba1a7e4bfa746f2c"
-};
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+        const firebaseConfig = {
+            apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
+            authDomain: "althespiansregister.firebaseapp.com",
+            projectId: "althespiansregister",
+            storageBucket: "althespiansregister.firebasestorage.app",
+            messagingSenderId: "661975262277",
+            appId: "1:661975262277:web:96341da8613be1a9746f2c"
+        };
+        // END OF FIREBASE CONFIGURATION
+        
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
         let app, db, auth;

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cash Register</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.5s ease-out forwards;
+        }
+        .product-button {
+            transition: transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
+        }
+        .product-button:active {
+            transform: scale(0.98);
+            box-shadow: 0 0 4px rgba(0,0,0,0.2) inset;
+        }
+        .hamburger-menu {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            width: 30px;
+            height: 25px;
+            cursor: pointer;
+            z-index: 50;
+        }
+        .hamburger-menu span {
+            display: block;
+            height: 3px;
+            width: 100%;
+            background: #FFD700;
+            border-radius: 9px;
+            transition: all 0.3s ease-in-out;
+        }
+        .hamburger-menu.open span:nth-child(1) { transform: rotate(-45deg) translate(-5px, 6px); }
+        .hamburger-menu.open span:nth-child(2) { opacity: 0; }
+        .hamburger-menu.open span:nth-child(3) { transform: rotate(45deg) translate(-5px, -6px); }
+        .cart-item:hover .remove-btn {
+            opacity: 1;
+        }
+        .remove-btn {
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'navy': '#001f4c',
+                        'gold': '#FFD700',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-white text-navy flex flex-col min-h-screen">
+
+    <!-- Header with Hamburger Menu -->
+    <header class="bg-navy p-4 flex justify-between items-center shadow-lg">
+        <h1 class="text-white text-2xl font-bold">Cash Register</h1>
+        <button id="hamburger-btn" class="hamburger-menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+    </header>
+
+    <!-- Navigation Menu (hidden by default) -->
+    <nav id="nav-menu" class="absolute top-0 right-0 w-64 h-full bg-navy text-white transform translate-x-full transition-transform ease-in-out duration-300 z-40 p-6 shadow-xl">
+        <h2 class="text-3xl font-bold mb-8">Menu</h2>
+        <ul>
+            <li><a href="#" id="register-link" class="block py-4 text-gold hover:text-white transition-colors">Register</a></li>
+            <li><a href="#" id="sales-link" class="block py-4 text-gold hover:text-white transition-colors">Sales Data</a></li>
+        </ul>
+    </nav>
+    <div id="nav-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden"></div>
+
+    <!-- Main Content Container -->
+    <div id="app-container" class="container mx-auto p-4 flex-grow flex flex-col items-center justify-center">
+        <!-- Loading and Error State -->
+        <div id="loading-state" class="text-center text-navy text-xl font-bold hidden">
+            <div class="flex items-center justify-center space-x-2">
+                <div class="w-4 h-4 rounded-full bg-navy animate-bounce"></div>
+                <div class="w-4 h-4 rounded-full bg-navy animate-bounce" style="animation-delay: -0.1s"></div>
+                <div class="w-4 h-4 rounded-full bg-navy animate-bounce" style="animation-delay: -0.2s"></div>
+            </div>
+            <p class="mt-4">Initializing...</p>
+        </div>
+        <div id="error-state" class="text-center text-red-500 text-xl font-bold hidden">There was an error. Check the console for details.</div>
+        <div id="no-db-state" class="text-center text-gray-500 text-lg font-bold hidden p-4 rounded-lg border-2 border-dashed border-gray-400">
+            <p>Database not connected. Running in offline mode.</p>
+            <p class="text-sm font-normal">Sales data will not be saved when the page is reloaded.</p>
+        </div>
+
+        <!-- Register View -->
+        <div id="register-view" class="w-full max-w-5xl flex flex-col lg:flex-row gap-8 hidden animate-fade-in">
+            <!-- Products & Register Section -->
+            <div class="lg:w-3/5 w-full flex flex-col space-y-8">
+                <h2 class="text-3xl font-bold text-center">Register</h2>
+                
+                <!-- Products Grid -->
+                <div id="product-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 bg-navy rounded-xl shadow-lg">
+                    <!-- Product buttons will be generated here by JavaScript -->
+                </div>
+
+                <!-- Current Transaction Section -->
+                <div class="bg-navy p-6 rounded-xl shadow-lg">
+                    <h3 class="text-2xl font-bold text-white mb-4">Current Sale</h3>
+                    <div id="cart-list" class="text-white mb-4 space-y-2">
+                        <!-- Cart items will be added here by JavaScript -->
+                    </div>
+                    <div class="text-right text-gold text-2xl font-bold">
+                        Total: <span id="current-total">$0.00</span>
+                    </div>
+                    <button id="complete-sale-btn" class="w-full mt-4 bg-gold text-navy font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors shadow-md">Complete Sale</button>
+                </div>
+            </div>
+            
+            <!-- Auth Info for Debugging -->
+            <div class="lg:w-2/5 w-full flex flex-col space-y-8">
+                <div class="bg-gray-100 text-gray-700 p-4 rounded-lg text-sm" id="auth-info-container">
+                    <p><strong>App ID:</strong> <span id="app-id"></span></p>
+                    <p><strong>User ID:</strong> <span id="user-id"></span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sales View -->
+        <div id="sales-view" class="w-full max-w-5xl flex flex-col space-y-8 hidden animate-fade-in">
+            <h2 class="text-3xl font-bold text-center">Sales Data</h2>
+            <div class="bg-navy p-6 rounded-xl shadow-lg">
+                <h3 class="text-2xl font-bold text-white mb-4">Sales Statistics</h3>
+                <div class="space-y-4 text-white">
+                    <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                        <p class="text-lg">Total Transactions</p>
+                        <p id="total-transactions" class="text-3xl font-bold text-gold">0</p>
+                    </div>
+                    <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                        <p class="text-lg">Total Revenue</p>
+                        <p id="total-revenue" class="text-3xl font-bold text-gold">$0.00</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-navy p-6 rounded-xl shadow-lg">
+                <h3 class="text-2xl font-bold text-white mb-4">Transaction History</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white bg-opacity-5 rounded-lg">
+                        <thead>
+                            <tr class="text-gold text-left">
+                                <th class="py-2 px-4 border-b-2 border-gold">Date</th>
+                                <th class="py-2 px-4 border-b-2 border-gold">Items</th>
+                                <th class="py-2 px-4 border-b-2 border-gold">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactions-table-body" class="text-white">
+                            <!-- Transaction rows will be added here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for messages -->
+    <div id="modal-container" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full text-center">
+            <p id="modal-message" class="text-xl text-navy font-semibold mb-4"></p>
+            <button id="modal-close-btn" class="bg-navy text-white px-6 py-2 rounded-lg hover:bg-blue-900 transition-colors">OK</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // --- Firebase Initialization ---
+        setLogLevel('debug');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Add a fallback config for local development
+        const firebaseConfig = {
+            apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
+            authDomain: "althespiansregister.firebaseapp.com",
+            projectId: "althespiansregister",
+            storageBucket: "althespiansregister.firebasestorage.app",
+            messagingSenderId: "661975262277",
+            appId: "1:661975262277:web:c060baba1a7e4bfa746f2c"
+        };
+        // Import the functions you need from the SDKs you need
+    import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
+  authDomain: "althespiansregister.firebaseapp.com",
+  projectId: "althespiansregister",
+  storageBucket: "althespiansregister.firebasestorage.app",
+  messagingSenderId: "661975262277",
+  appId: "1:661975262277:web:c060baba1a7e4bfa746f2c"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        let app, db, auth;
+        let userId = 'unknown';
+        let isOnline = false;
+
+        const authInfoContainer = document.getElementById('auth-info-container');
+        const appIdEl = document.getElementById('app-id');
+        const userIdEl = document.getElementById('user-id');
+        const noDbState = document.getElementById('no-db-state');
+
+        // Products and prices data
+        const products = [
+            { name: "Accessories", price: 2.00 },
+            { name: "Posters", price: 10.00 },
+            { name: "Tote Bag", price: 15.00 },
+            { name: "Stickers", price: 1.00 },
+            { name: "Pens", price: 1.00 },
+            { name: "Ducks", price: 2.00 },
+            { name: "Friendship Bracelets", price: 2.00 },
+            { name: "Playbills", price: 5.00 },
+            { name: "Pouches", price: 10.00 },
+            { name: "Tattoos", price: 1.00 },
+            { name: "Stage Door Sign", price: 5.00 },
+            { name: "Julius Caesar Pen Holder", price: 3.00 },
+            { name: "Signed Playbill", price: 15.00 },
+            { name: "Blanket", price: 15.00 },
+            { name: "Makeup Faces", price: 25.00 },
+            { name: "Hadestown Coloring Pages", price: 5.00 },
+            { name: "Postcards", price: 2.00 }
+        ];
+
+        let currentCart = [];
+        let currentTotal = 0;
+
+        const productListEl = document.getElementById('product-list');
+        const cartListEl = document.getElementById('cart-list');
+        const currentTotalEl = document.getElementById('current-total');
+        const completeSaleBtn = document.getElementById('complete-sale-btn');
+        const totalTransactionsEl = document.getElementById('total-transactions');
+        const totalRevenueEl = document.getElementById('total-revenue');
+        const transactionsTableBody = document.getElementById('transactions-table-body');
+
+        // Modal elements
+        const modalContainer = document.getElementById('modal-container');
+        const modalMessageEl = document.getElementById('modal-message');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+
+        // Navigation elements
+        const hamburgerBtn = document.getElementById('hamburger-btn');
+        const navMenu = document.getElementById('nav-menu');
+        const navOverlay = document.getElementById('nav-overlay');
+        const registerLink = document.getElementById('register-link');
+        const salesLink = document.getElementById('sales-link');
+        const registerView = document.getElementById('register-view');
+        const salesView = document.getElementById('sales-view');
+        const loadingState = document.getElementById('loading-state');
+        const errorState = document.getElementById('error-state');
+        
+        // Show a custom message modal
+        function showMessage(message) {
+            modalMessageEl.textContent = message;
+            modalContainer.classList.remove('hidden');
+        }
+
+        modalCloseBtn.addEventListener('click', () => {
+            modalContainer.classList.add('hidden');
+        });
+        
+        // Toggle the navigation menu
+        function toggleNav() {
+            navMenu.classList.toggle('translate-x-full');
+            navOverlay.classList.toggle('hidden');
+            hamburgerBtn.classList.toggle('open');
+        }
+
+        // Show a specific view
+        function showView(view) {
+            registerView.classList.add('hidden');
+            salesView.classList.add('hidden');
+            view.classList.remove('hidden');
+            toggleNav(); // Close the menu after selecting a view
+        }
+
+        hamburgerBtn.addEventListener('click', toggleNav);
+        navOverlay.addEventListener('click', toggleNav);
+        registerLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showView(registerView);
+        });
+        salesLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showView(salesView);
+        });
+
+        // Function to render the product buttons
+        function renderProducts() {
+            productListEl.innerHTML = '';
+            products.forEach(product => {
+                const button = document.createElement('button');
+                button.className = 'product-button bg-gold text-navy font-bold py-4 rounded-lg shadow-md hover:bg-yellow-400 transition-colors';
+                button.innerHTML = `
+                    <span>${product.name}</span>
+                    <span class="text-sm block mt-1">$${product.price.toFixed(2)}</span>
+                `;
+                button.onclick = () => addItemToCart(product);
+                productListEl.appendChild(button);
+            });
+        }
+
+        // Function to add an item to the cart
+        function addItemToCart(product) {
+            currentCart.push(product);
+            currentTotal += product.price;
+            updateCartDisplay();
+        }
+
+        // Function to remove an item from the cart
+        function removeItemFromCart(index) {
+            const removedItem = currentCart.splice(index, 1)[0];
+            currentTotal -= removedItem.price;
+            updateCartDisplay();
+        }
+
+        // Function to update the cart display and total
+        function updateCartDisplay() {
+            cartListEl.innerHTML = '';
+            const tempCart = [...currentCart];
+            
+            for (let i = 0; i < tempCart.length; i++) {
+                const item = tempCart[i];
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center cart-item';
+                div.innerHTML = `
+                    <p class="text-white">${item.name}</p>
+                    <div class="flex items-center">
+                        <p class="text-gold">$${item.price.toFixed(2)}</p>
+                        <button class="remove-btn text-white text-lg ml-4 leading-none" data-index="${i}">&times;</button>
+                    </div>
+                `;
+                cartListEl.appendChild(div);
+            }
+
+            // Attach event listeners for remove buttons
+            cartListEl.querySelectorAll('.remove-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    removeItemFromCart(index);
+                });
+            });
+
+            currentTotalEl.textContent = `$${currentTotal.toFixed(2)}`;
+        }
+
+        // Function to handle a completed sale
+        async function completeSale() {
+            if (currentCart.length === 0) {
+                showMessage("The cart is empty! Please add some items.");
+                return;
+            }
+
+            if (!isOnline) {
+                showMessage("Offline mode: Sale not saved to database.");
+                // Reset cart locally
+                currentCart = [];
+                currentTotal = 0;
+                updateCartDisplay();
+                return;
+            }
+
+            try {
+                // Add new transaction to the transactions collection
+                const newTransaction = {
+                    total: currentTotal,
+                    items: JSON.stringify(currentCart), // Serialize the array
+                    date: new Date().toISOString()
+                };
+                await addDoc(collection(db, 'artifacts', appId, 'public/data', 'transactions'), newTransaction);
+                
+                // Update overall sales statistics
+                const salesRef = doc(db, 'artifacts', appId, 'public/data', 'salesData');
+                const salesSnap = await getDoc(salesRef);
+                let salesData = salesSnap.exists() ? salesSnap.data() : { totalRevenue: 0, totalTransactions: 0 };
+                
+                salesData.totalRevenue += currentTotal;
+                salesData.totalTransactions += 1;
+
+                await setDoc(salesRef, salesData, { merge: true });
+
+                // Reset cart
+                currentCart = [];
+                currentTotal = 0;
+                updateCartDisplay();
+                showMessage(`Sale Complete! Total: $${newTransaction.total.toFixed(2)}`);
+
+            } catch (e) {
+                console.error("Error completing sale:", e);
+                showMessage("There was an error saving the sale data. Please check the console for details.");
+            }
+        }
+
+        // Function to set up real-time listener for sales data
+        function setupSalesDataListener() {
+            if (!isOnline) {
+                noDbState.classList.remove('hidden');
+                return;
+            }
+            noDbState.classList.add('hidden');
+            
+            // Listen for changes to overall sales stats
+            const salesRef = doc(db, 'artifacts', appId, 'public/data', 'salesData');
+            onSnapshot(salesRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    totalTransactionsEl.textContent = data.totalTransactions || 0;
+                    totalRevenueEl.textContent = `$${(data.totalRevenue || 0).toFixed(2)}`;
+                } else {
+                    totalTransactionsEl.textContent = '0';
+                    totalRevenueEl.textContent = '$0.00';
+                }
+            }, (error) => {
+                console.error("Error listening to sales data:", error);
+                showMessage("Failed to connect to the database. Please check your network connection.");
+            });
+
+            // Listen for changes to the transaction history
+            const transactionsRef = collection(db, 'artifacts', appId, 'public/data', 'transactions');
+            onSnapshot(query(transactionsRef), (snapshot) => {
+                const history = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    history.push({
+                        date: new Date(data.date).toLocaleString(),
+                        total: data.total,
+                        items: JSON.parse(data.items)
+                    });
+                });
+                renderTransactionTable(history);
+            }, (error) => {
+                console.error("Error listening to transaction history:", error);
+            });
+        }
+
+        // Function to render the transaction table
+        function renderTransactionTable(history) {
+            transactionsTableBody.innerHTML = '';
+            history.forEach(transaction => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-white border-opacity-20 last:border-b-0';
+                
+                const dateTd = document.createElement('td');
+                dateTd.className = 'py-2 px-4';
+                dateTd.textContent = transaction.date;
+                
+                const itemsTd = document.createElement('td');
+                itemsTd.className = 'py-2 px-4';
+                // Display unique items with counts
+                const itemCounts = transaction.items.reduce((acc, item) => {
+                    acc[item.name] = (acc[item.name] || 0) + 1;
+                    return acc;
+                }, {});
+                itemsTd.textContent = Object.keys(itemCounts).map(item => `${item} x${itemCounts[item]}`).join(', ');
+
+                const totalTd = document.createElement('td');
+                totalTd.className = 'py-2 px-4';
+                totalTd.textContent = `$${transaction.total.toFixed(2)}`;
+                
+                tr.appendChild(dateTd);
+                tr.appendChild(itemsTd);
+                tr.appendChild(totalTd);
+                transactionsTableBody.appendChild(tr);
+            });
+        }
+
+        // --- Main App Logic on Load ---
+        window.onload = async function() {
+            loadingState.classList.remove('hidden');
+            try {
+                // Check if the environment provides a valid Firebase config
+                if (typeof __firebase_config !== 'undefined' && Object.keys(firebaseConfig).length > 0 && firebaseConfig.projectId !== "dummy-project-id") {
+                    isOnline = true;
+                    app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    userId = auth.currentUser.uid;
+                } else {
+                    isOnline = false;
+                    console.warn("Firebase config not found. Running in offline mode. Sales data will not be persisted.");
+                    userId = 'local-user'; // Use a static ID for local dev
+                }
+                
+                // Show auth info for verification
+                appIdEl.textContent = appId;
+                userIdEl.textContent = userId;
+
+                renderProducts();
+                setupSalesDataListener(); // Call this regardless of online status
+                
+                // Hide loading and show the main view
+                loadingState.classList.add('hidden');
+                showView(registerView);
+
+                completeSaleBtn.addEventListener('click', completeSale);
+
+            } catch (e) {
+                console.error("Failed to initialize the app:", e);
+                loadingState.classList.add('hidden');
+                errorState.classList.remove('hidden');
+                showMessage("There was an error loading the app. Please check the console for details.");
+            }
+        }
+    </script>
+</body>
+</html>

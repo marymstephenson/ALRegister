@@ -186,56 +186,44 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // --- Firebase Initialization ---
-        setLogLevel('debug');
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Global Variables (provided by the environment) ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-        // START OF FIREBASE CONFIGURATION
-
-        // Import the functions you need from the SDKs you need
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-        // TODO: Add SDKs for Firebase products that you want to use
-        // https://firebase.google.com/docs/web/setup#available-libraries
-
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
-            authDomain: "althespiansregister.firebaseapp.com",
-            projectId: "althespiansregister",
-            storageBucket: "althespiansregister.firebasestorage.app",
-            messagingSenderId: "661975262277",
-            appId: "1:661975262277:web:96341da8613be1a9746f2c"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
-            authDomain: "althespiansregister.firebaseapp.com",
-            projectId: "althespiansregister",
-            storageBucket: "althespiansregister.firebasestorage.app",
-            messagingSenderId: "661975262277",
-            appId: "1:661975262277:web:96341da8613be1a9746f2c"
-        };
-        // END OF FIREBASE CONFIGURATION
-        
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
+
         let app, db, auth;
         let userId = 'unknown';
         let isOnline = false;
-
+        
+        // --- DOM Elements ---
         const authInfoContainer = document.getElementById('auth-info-container');
         const appIdEl = document.getElementById('app-id');
         const userIdEl = document.getElementById('user-id');
         const noDbState = document.getElementById('no-db-state');
+        const productListEl = document.getElementById('product-list');
+        const cartListEl = document.getElementById('cart-list');
+        const currentTotalEl = document.getElementById('current-total');
+        const completeSaleBtn = document.getElementById('complete-sale-btn');
+        const totalTransactionsEl = document.getElementById('total-transactions');
+        const totalRevenueEl = document.getElementById('total-revenue');
+        const transactionsTableBody = document.getElementById('transactions-table-body');
+        const modalContainer = document.getElementById('modal-container');
+        const modalMessageEl = document.getElementById('modal-message');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+        const hamburgerBtn = document.getElementById('hamburger-btn');
+        const navMenu = document.getElementById('nav-menu');
+        const navOverlay = document.getElementById('nav-overlay');
+        const registerLink = document.getElementById('register-link');
+        const salesLink = document.getElementById('sales-link');
+        const registerView = document.getElementById('register-view');
+        const salesView = document.getElementById('sales-view');
+        const loadingState = document.getElementById('loading-state');
+        const errorState = document.getElementById('error-state');
 
-        // Products and prices data
+        // --- State Variables ---
         const products = [
             { name: "Accessories", price: 2.00 },
             { name: "Posters", price: 10.00 },
@@ -255,71 +243,28 @@
             { name: "Hadestown Coloring Pages", price: 5.00 },
             { name: "Postcards", price: 2.00 }
         ];
-
         let currentCart = [];
         let currentTotal = 0;
 
-        const productListEl = document.getElementById('product-list');
-        const cartListEl = document.getElementById('cart-list');
-        const currentTotalEl = document.getElementById('current-total');
-        const completeSaleBtn = document.getElementById('complete-sale-btn');
-        const totalTransactionsEl = document.getElementById('total-transactions');
-        const totalRevenueEl = document.getElementById('total-revenue');
-        const transactionsTableBody = document.getElementById('transactions-table-body');
-
-        // Modal elements
-        const modalContainer = document.getElementById('modal-container');
-        const modalMessageEl = document.getElementById('modal-message');
-        const modalCloseBtn = document.getElementById('modal-close-btn');
-
-        // Navigation elements
-        const hamburgerBtn = document.getElementById('hamburger-btn');
-        const navMenu = document.getElementById('nav-menu');
-        const navOverlay = document.getElementById('nav-overlay');
-        const registerLink = document.getElementById('register-link');
-        const salesLink = document.getElementById('sales-link');
-        const registerView = document.getElementById('register-view');
-        const salesView = document.getElementById('sales-view');
-        const loadingState = document.getElementById('loading-state');
-        const errorState = document.getElementById('error-state');
-        
-        // Show a custom message modal
+        // --- Helper Functions ---
         function showMessage(message) {
             modalMessageEl.textContent = message;
             modalContainer.classList.remove('hidden');
         }
 
-        modalCloseBtn.addEventListener('click', () => {
-            modalContainer.classList.add('hidden');
-        });
-        
-        // Toggle the navigation menu
         function toggleNav() {
             navMenu.classList.toggle('translate-x-full');
             navOverlay.classList.toggle('hidden');
             hamburgerBtn.classList.toggle('open');
         }
 
-        // Show a specific view
         function showView(view) {
             registerView.classList.add('hidden');
             salesView.classList.add('hidden');
             view.classList.remove('hidden');
-            toggleNav(); // Close the menu after selecting a view
+            toggleNav();
         }
 
-        hamburgerBtn.addEventListener('click', toggleNav);
-        navOverlay.addEventListener('click', toggleNav);
-        registerLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            showView(registerView);
-        });
-        salesLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            showView(salesView);
-        });
-
-        // Function to render the product buttons
         function renderProducts() {
             productListEl.innerHTML = '';
             products.forEach(product => {
@@ -334,21 +279,18 @@
             });
         }
 
-        // Function to add an item to the cart
         function addItemToCart(product) {
             currentCart.push(product);
             currentTotal += product.price;
             updateCartDisplay();
         }
 
-        // Function to remove an item from the cart
         function removeItemFromCart(index) {
             const removedItem = currentCart.splice(index, 1)[0];
             currentTotal -= removedItem.price;
             updateCartDisplay();
         }
 
-        // Function to update the cart display and total
         function updateCartDisplay() {
             cartListEl.innerHTML = '';
             const tempCart = [...currentCart];
@@ -367,7 +309,6 @@
                 cartListEl.appendChild(div);
             }
 
-            // Attach event listeners for remove buttons
             cartListEl.querySelectorAll('.remove-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
                     const index = parseInt(e.target.dataset.index);
@@ -378,7 +319,6 @@
             currentTotalEl.textContent = `$${currentTotal.toFixed(2)}`;
         }
 
-        // Function to handle a completed sale
         async function completeSale() {
             if (currentCart.length === 0) {
                 showMessage("The cart is empty! Please add some items.");
@@ -387,7 +327,6 @@
 
             if (!isOnline) {
                 showMessage("Offline mode: Sale not saved to database.");
-                // Reset cart locally
                 currentCart = [];
                 currentTotal = 0;
                 updateCartDisplay();
@@ -395,15 +334,13 @@
             }
 
             try {
-                // Add new transaction to the transactions collection
                 const newTransaction = {
                     total: currentTotal,
-                    items: JSON.stringify(currentCart), // Serialize the array
+                    items: JSON.stringify(currentCart),
                     date: new Date().toISOString()
                 };
                 await addDoc(collection(db, 'artifacts', appId, 'public/data', 'transactions'), newTransaction);
                 
-                // Update overall sales statistics
                 const salesRef = doc(db, 'artifacts', appId, 'public/data', 'salesData');
                 const salesSnap = await getDoc(salesRef);
                 let salesData = salesSnap.exists() ? salesSnap.data() : { totalRevenue: 0, totalTransactions: 0 };
@@ -413,7 +350,6 @@
 
                 await setDoc(salesRef, salesData, { merge: true });
 
-                // Reset cart
                 currentCart = [];
                 currentTotal = 0;
                 updateCartDisplay();
@@ -425,7 +361,6 @@
             }
         }
 
-        // Function to set up real-time listener for sales data
         function setupSalesDataListener() {
             if (!isOnline) {
                 noDbState.classList.remove('hidden');
@@ -433,7 +368,6 @@
             }
             noDbState.classList.add('hidden');
             
-            // Listen for changes to overall sales stats
             const salesRef = doc(db, 'artifacts', appId, 'public/data', 'salesData');
             onSnapshot(salesRef, (docSnap) => {
                 if (docSnap.exists()) {
@@ -449,7 +383,6 @@
                 showMessage("Failed to connect to the database. Please check your network connection.");
             });
 
-            // Listen for changes to the transaction history
             const transactionsRef = collection(db, 'artifacts', appId, 'public/data', 'transactions');
             onSnapshot(query(transactionsRef), (snapshot) => {
                 const history = [];
@@ -467,7 +400,6 @@
             });
         }
 
-        // Function to render the transaction table
         function renderTransactionTable(history) {
             transactionsTableBody.innerHTML = '';
             history.forEach(transaction => {
@@ -480,7 +412,6 @@
                 
                 const itemsTd = document.createElement('td');
                 itemsTd.className = 'py-2 px-4';
-                // Display unique items with counts
                 const itemCounts = transaction.items.reduce((acc, item) => {
                     acc[item.name] = (acc[item.name] || 0) + 1;
                     return acc;
@@ -498,41 +429,67 @@
             });
         }
 
-        // --- Main App Logic on Load ---
-        window.onload = async function() {
+        // --- Event Listeners ---
+        window.addEventListener('load', () => {
+            // Hide loading and show the correct view
+            loadingState.classList.add('hidden');
+            showView(registerView);
+        });
+        
+        modalCloseBtn.addEventListener('click', () => {
+            modalContainer.classList.add('hidden');
+        });
+
+        hamburgerBtn.addEventListener('click', toggleNav);
+        navOverlay.addEventListener('click', toggleNav);
+        registerLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showView(registerView);
+        });
+        salesLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showView(salesView);
+        });
+        completeSaleBtn.addEventListener('click', completeSale);
+        
+        // --- Main App Initialization ---
+        async function initializeApp() {
             loadingState.classList.remove('hidden');
             try {
-                // Check if the environment provides a valid Firebase config
-                if (typeof __firebase_config !== 'undefined' && Object.keys(firebaseConfig).length > 0 && firebaseConfig.projectId !== "dummy-project-id") {
+                if (firebaseConfig && firebaseConfig.projectId && firebaseConfig.projectId !== "dummy-project-id") {
                     isOnline = true;
                     app = initializeApp(firebaseConfig);
                     auth = getAuth(app);
                     db = getFirestore(app);
-
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                    userId = auth.currentUser.uid;
+                    setLogLevel('debug');
                 } else {
                     isOnline = false;
                     console.warn("Firebase config not found. Running in offline mode. Sales data will not be persisted.");
-                    userId = 'local-user'; // Use a static ID for local dev
                 }
-                
-                // Show auth info for verification
-                appIdEl.textContent = appId;
-                userIdEl.textContent = userId;
 
-                renderProducts();
-                setupSalesDataListener(); // Call this regardless of online status
-                
-                // Hide loading and show the main view
-                loadingState.classList.add('hidden');
-                showView(registerView);
-
-                completeSaleBtn.addEventListener('click', completeSale);
+                // Auth state listener to handle both initial sign-in and subsequent state changes
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        appIdEl.textContent = appId;
+                        userIdEl.textContent = userId;
+                        renderProducts();
+                        setupSalesDataListener();
+                        loadingState.classList.add('hidden');
+                    } else if (initialAuthToken && isOnline) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else if (isOnline) {
+                        await signInAnonymously(auth);
+                    } else {
+                        // Offline mode
+                        userId = 'local-user';
+                        appIdEl.textContent = appId;
+                        userIdEl.textContent = userId;
+                        renderProducts();
+                        setupSalesDataListener();
+                        loadingState.classList.add('hidden');
+                    }
+                });
 
             } catch (e) {
                 console.error("Failed to initialize the app:", e);
@@ -541,6 +498,8 @@
                 showMessage("There was an error loading the app. Please check the console for details.");
             }
         }
+        
+        initializeApp();
     </script>
 </body>
 </html>

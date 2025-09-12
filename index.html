@@ -184,13 +184,12 @@
         
         // PASTE YOUR FIREBASE CONFIG HERE to bring the app online
         const localFirebaseConfig = {
-            // Your config object should look something like this:
-            // apiKey: "...",
-            // authDomain: "...",
-            // projectId: "...",
-            // storageBucket: "...",
-            // messagingSenderId: "...",
-            // appId: "..."
+            apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
+            authDomain: "althespiansregister.firebaseapp.com",
+            projectId: "althespiansregister",
+            storageBucket: "althespiansregister.firebasestorage.app",
+            messagingSenderId: "661975262277",
+            appId: "1:661975262277:web:96341da8613be1a9746f2c"
         };
 
         let app, db, auth;
@@ -482,10 +481,10 @@
                     });
                 } else {
                     clearTimeout(timeoutId);
-                    // Running in offline mode
+                    // Running in offline mode because the Firebase config is not provided.
+                    console.warn("Firebase config not found. Running in offline mode. Sales data will not be persisted.");
                     userId = 'local-user';
                     renderProducts();
-                    console.warn("Firebase config not found. Running in offline mode. Sales data will not be persisted.");
                     loadingState.classList.add('hidden');
                     registerView.classList.remove('hidden');
                 }

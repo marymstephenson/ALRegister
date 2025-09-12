@@ -333,7 +333,13 @@
                 };
 
                 //  Save the transaction in a subcollection
-                await addDoc(collection(db, `artifacts/${appId}/public/data/transactions`), newTransaction);
+                await addDoc(collection(
+                    db,
+                    "artifacts", appId,
+                    "public", "data",
+                    "transactions"
+                ), newTransaction);
+
 
                 // ✅ Correct doc reference (even number of segments)
                 const salesRef = doc(db,
@@ -388,7 +394,14 @@
             });
 
             //  Transactions subcollection stays the same
-            const transactionsRef = collection(db, `artifacts/${appId}/public/data/transactions`);
+            // In setupSalesDataListener()
+            const transactionsRef = collection(
+                db,
+                "artifacts", appId,
+                "public", "data",
+                "transactions"
+        );
+
             onSnapshot(transactionsRef, (snapshot) => {
                 const history = [];
                 snapshot.forEach(doc => {

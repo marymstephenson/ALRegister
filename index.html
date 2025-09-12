@@ -187,7 +187,7 @@
             apiKey: "AIzaSyDFeE4VRolDL0gTS-7RnD8Xtot_25jIWPE",
             authDomain: "althespiansregister.firebaseapp.com",
             projectId: "althespiansregister",
-            storageBucket: "althespiansregister.firebasestorage.app",
+            storageBucket: "althespiansregister.appspot.com",
             messagingSenderId: "661975262277",
             appId: "1:661975262277:web:96341da8613be1a9746f2c"
         };
@@ -442,7 +442,7 @@
             registerView.classList.add('hidden');
             salesView.classList.add('hidden');
 
-            const firebaseConfig = canvasFirebaseConfig || localFirebaseConfig;
+            const firebaseConfig = localFirebaseConfig;
             
             // Set a timeout to proceed in offline mode if online initialization takes too long
             const timeoutId = setTimeout(() => {

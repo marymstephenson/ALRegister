@@ -331,15 +331,22 @@
                     items: JSON.stringify(currentCart),
                     date: new Date().toISOString()
                 };
+
+                //  Save the transaction in a subcollection
                 await addDoc(collection(db, `artifacts/${appId}/public/data/transactions`), newTransaction);
-                
+
+                // ✅ Correct doc reference (even number of segments)
                 const salesRef = doc(db,
-                    "artifacts/default-app-id/public/data",   // a document path (4 segments)
-                    "salesData"                               // name of the document inside that path
+                    "artifacts", appId,
+                    "public", "data",
+                    "salesData"
                 );
+
                 const salesSnap = await getDoc(salesRef);
-                let salesData = salesSnap.exists() ? salesSnap.data() : { totalRevenue: 0, totalTransactions: 0 };
-                
+                let salesData = salesSnap.exists()
+                    ? salesSnap.data()
+                    : { totalRevenue: 0, totalTransactions: 0 };
+
                 salesData.totalRevenue += currentTotal;
                 salesData.totalTransactions += 1;
 
@@ -356,14 +363,20 @@
             }
         }
 
+
         function setupSalesDataListener() {
-            if (!db) {
-                return;
-            }
-            const salesRef = doc(db, `artifacts/${appId}/public/data`, "salesData");
+            if (!db) return;
+
+            //  Corrected salesData doc reference
+            const salesRef = doc(db,
+                "artifacts", appId,
+                "public", "data",
+                "salesData"
+            );
+
             onSnapshot(salesRef, (docSnap) => {
                 if (docSnap.exists()) {
-                    const data = docSnap.data();
+                const data = docSnap.data();
                     totalTransactionsEl.textContent = data.totalTransactions || 0;
                     totalRevenueEl.textContent = `$${(data.totalRevenue || 0).toFixed(2)}`;
                 } else {
@@ -374,6 +387,7 @@
                 console.error("Error listening to sales data:", error);
             });
 
+            //  Transactions subcollection stays the same
             const transactionsRef = collection(db, `artifacts/${appId}/public/data/transactions`);
             onSnapshot(transactionsRef, (snapshot) => {
                 const history = [];
@@ -385,13 +399,14 @@
                         items: JSON.parse(data.items)
                     });
                 });
-                // Sort by date in descending order (newest first)
+                // Sort by date descending (newest first)
                 history.sort((a, b) => new Date(b.date) - new Date(a.date));
                 renderTransactionTable(history);
             }, (error) => {
                 console.error("Error listening to transaction history:", error);
             });
         }
+
 
         function renderTransactionTable(history) {
             transactionsTableBody.innerHTML = '';

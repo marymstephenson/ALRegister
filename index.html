@@ -333,7 +333,10 @@
                 };
                 await addDoc(collection(db, `artifacts/${appId}/public/data/transactions`), newTransaction);
                 
-                const salesRef = doc(db, `artifacts/${appId}/public/data/salesData`);
+                const salesRef = doc(db,
+                    "artifacts/default-app-id/public/data",   // a document path (4 segments)
+                    "salesData"                               // name of the document inside that path
+                );
                 const salesSnap = await getDoc(salesRef);
                 let salesData = salesSnap.exists() ? salesSnap.data() : { totalRevenue: 0, totalTransactions: 0 };
                 
@@ -357,8 +360,7 @@
             if (!db) {
                 return;
             }
-            
-            const salesRef = doc(db, `artifacts/${appId}/public/data/salesData`);
+            const salesRef = doc(db, `artifacts/${appId}/public/data`, "salesData");
             onSnapshot(salesRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();

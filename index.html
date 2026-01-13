@@ -35,17 +35,16 @@
             cursor: pointer;
             z-index: 50;
         }
-        .hamburger-menu span {
-            display: block;
-            height: 3px;
-            width: 100%;
-            background: #FFD700;
-            border-radius: 9px;
-            transition: all 0.3s ease-in-out;
+        
+        #hamburger-btn img {
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Adds a little "bounce" */
         }
-        .hamburger-menu.open span:nth-child(1) { transform: rotate(-45deg) translate(-5px, 6px); }
-        .hamburger-menu.open span:nth-child(2) { opacity: 0; }
-        .hamburger-menu.open span:nth-child(3) { transform: rotate(45deg) translate(-5px, -6px); }
+
+        /* When the menu is open, the duck will tilt and grow slightly */
+        #hamburger-btn.open img {
+            transform: scale(1.2) rotate(-15deg);
+            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
+        }
         .cart-item:hover .remove-btn {
             opacity: 1;
         }
@@ -61,6 +60,11 @@
                     colors: {
                         'navy': '#001f4c',
                         'gold': '#FFD700',
+                        'sto-blue': '#bfdbfe', //Light-blue
+                    },
+                    borderRadius: {
+                        '4xl': '2rem',
+                        '5xl': '3rem',
                     }
                 }
             }
@@ -71,11 +75,15 @@
 
     <!-- Header with Hamburger Menu -->
     <header class="bg-navy p-4 flex justify-between items-center shadow-lg">
-        <h1 class="text-white text-2xl font-bold">Cash Register</h1>
-        <button id="hamburger-btn" class="hamburger-menu">
-            <span></span>
-            <span></span>
-            <span></span>
+        <div onclick="showView(registerView)" class="flex items-center space-x-3 cursor-pointer group">
+            <div class="bg-white p-1 rounded-md shadow-sm">
+                <img src="images/Logo.png" class="h-8 w-auto object-contain" alt="STO Logo">
+            </div>
+            <h1 class="text-white text-2xl font-black tracking-tight group-hover:text-gold transition-colors">STO Store</h1>
+        </div>
+
+        <button id="hamburger-btn" class="focus:outline-none hover:rotate-12 transition-transform active:scale-90">
+            <img src="images/Duck.png" class="h-10 w-10 object-contain" alt="Menu">
         </button>
     </header>
 
@@ -103,66 +111,66 @@
         <div id="error-state" class="text-center text-red-500 text-xl font-bold hidden">There was an error. Check the console for details.</div>
 
         <!-- Register View -->
-        <div id="register-view" class="w-full max-w-5xl flex flex-col lg:flex-row gap-8 hidden animate-fade-in">
-            <!-- Products & Register Section -->
-            <div class="lg:w-full w-full flex flex-col space-y-8">
-                <h2 class="text-3xl font-bold text-center">Register</h2>
-                
-                <!-- Products Grid -->
-                <div id="product-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 bg-navy rounded-xl shadow-lg">
-                    <!-- Product buttons will be generated here by JavaScript -->
-                </div>
-
-                <!-- Current Transaction Section -->
-                <div class="bg-navy p-6 rounded-xl shadow-lg">
-                    <h3 class="text-2xl font-bold text-white mb-4">Current Sale</h3>
-                    <div id="cart-list" class="text-white mb-4 space-y-2">
-                        <!-- Cart items will be added here by JavaScript -->
+        <div id="register-view" class="w-full max-w-4xl flex flex-col hidden animate-fade-in p-4">
+            <div class="bg-sto-blue p-8 rounded-[3rem] shadow-inner mb-6">
+                <div id="product-list" class="grid grid-cols-2 sm:grid-cols-4 gap-6">
                     </div>
-                    <div class="text-right text-gold text-2xl font-bold">
-                        Total: <span id="current-total">$0.00</span>
-                    </div>
-                    <button id="complete-sale-btn" class="w-full mt-4 bg-gold text-navy font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors shadow-md">Complete Sale</button>
-                </div>
             </div>
+
+            <div class="bg-gold p-3 rounded-full flex justify-between items-center shadow-lg border-b-4 border-yellow-500">
+                <div class="ml-8">
+                    <span class="text-navy font-black text-3xl italic">Total: <span id="current-total">$0.00</span></span>
+                </div>
+                <button id="complete-sale-btn" class="bg-navy text-white text-2xl font-black px-12 py-3 rounded-full hover:bg-blue-900 transition-all active:scale-95 shadow-md">
+                    Complete Sale
+                </button>
+            </div>
+    
+            <div id="cart-list" class="mt-4 px-6 text-navy text-sm font-bold opacity-70"></div>
         </div>
 
         <!-- Sales View -->
-        <div id="sales-view" class="w-full max-w-5xl flex flex-col space-y-8 hidden animate-fade-in">
-            <h2 class="text-3xl font-bold text-center">Sales Data</h2>
-            <div class="bg-navy p-6 rounded-xl shadow-lg">
-                <h3 class="text-2xl font-bold text-white mb-4">Sales Statistics</h3>
-                <div class="space-y-4 text-white">
-                    <div class="bg-white bg-opacity-10 p-4 rounded-lg">
-                        <p class="text-lg">Total Transactions</p>
-                        <p id="total-transactions" class="text-3xl font-bold text-gold">0</p>
-                    </div>
-                    <div class="bg-white bg-opacity-10 p-4 rounded-lg">
-                        <p class="text-lg">Total Revenue</p>
-                        <p id="total-revenue" class="text-3xl font-bold text-gold">$0.00</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="bg-navy p-6 rounded-xl shadow-lg">
-                <h3 class="text-2xl font-bold text-white mb-4">Transaction History</h3>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full bg-white bg-opacity-5 rounded-lg">
-                        <thead>
-                            <tr class="text-gold text-left">
-                                <th class="py-2 px-4 border-b-2 border-gold">Date</th>
-                                <th class="py-2 px-4 border-b-2 border-gold">Items</th>
-                                <th class="py-2 px-4 border-b-2 border-gold">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody id="transactions-table-body" class="text-white">
-                            <!-- Transaction rows will be added here -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        <div id="sales-view" class="w-full max-w-5xl flex flex-col space-y-6 hidden animate-fade-in p-4">
+    
+    <div class="flex flex-col md:flex-row gap-4 justify-center items-center mb-2">
+        <div class="bg-navy px-10 py-4 rounded-full shadow-lg text-center border-2 border-gold min-w-[200px]">
+            <p class="text-gold text-xs uppercase tracking-widest font-bold">Total Transactions</p>
+            <p id="total-transactions" class="text-white text-3xl font-bold">0</p>
+        </div>
+        <div class="bg-navy px-10 py-4 rounded-full shadow-lg text-center border-2 border-gold min-w-[200px]">
+            <p class="text-gold text-xs uppercase tracking-widest font-bold">Total Revenue</p>
+            <p id="total-revenue" class="text-white text-3xl font-bold">$0.00</p>
         </div>
     </div>
+
+    <div class="bg-blue-100 p-6 md:p-8 rounded-[3rem] shadow-inner flex-grow">
+        <h3 class="text-2xl font-black text-navy mb-6 flex items-center">
+            <span class="mr-2">📋</span> Transaction History
+        </h3>
+        
+        <div class="overflow-hidden rounded-2xl border border-navy border-opacity-10 bg-white shadow-sm">
+            <table class="min-w-full">
+                <thead class="bg-navy text-white">
+                    <tr>
+                        <th class="py-4 px-6 text-left text-sm font-bold uppercase tracking-wider">Time</th>
+                        <th class="py-4 px-6 text-left text-sm font-bold uppercase tracking-wider">Items</th>
+                        <th class="py-4 px-6 text-right text-sm font-bold uppercase tracking-wider">Total</th>
+                    </tr>
+                </thead>
+                <tbody id="transactions-table-body" class="divide-y divide-blue-100 text-navy">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="bg-gold p-2 rounded-full flex justify-between items-center shadow-lg">
+        <span class="ml-8 font-black text-navy text-xl uppercase italic">Sales Report</span>
+        <button id="back-to-reg-btn" onclick="showView(document.getElementById('register-view'))" 
+                class="bg-navy text-white px-8 py-3 rounded-full font-bold hover:bg-blue-900 transition-all active:scale-95 shadow-md">
+            Return to Register
+        </button>
+    </div>
+</div>
 
     <!-- Modal for messages -->
     <div id="modal-container" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden">
@@ -262,10 +270,10 @@
             productListEl.innerHTML = '';
             products.forEach(product => {
                 const button = document.createElement('button');
-                button.className = 'product-button bg-gold text-navy font-bold py-4 rounded-lg shadow-md hover:bg-yellow-400 transition-colors';
+                button.className = 'bg-navy text-white p-4 h-24 rounded-[1.5rem] shadow-md hover:bg-blue-900 transition-all active:scale-95 flex flex-col items-center justify-center border-2 border-transparent hover:border-gold';
                 button.innerHTML = `
-                    <span>${product.name}</span>
-                    <span class="text-sm block mt-1">$${product.price.toFixed(2)}</span>
+                    <span class="text-sm font-bold leading-tight uppercase tracking-wide">${product.name}</span>
+                    <span class="text-lg font-black mt-1">$${product.price.toFixed(2)}</span>
                 `;
                 button.onclick = () => addItemToCart(product);
                 productListEl.appendChild(button);

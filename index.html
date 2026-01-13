@@ -340,12 +340,9 @@
                     "transactions"
                 ), newTransaction);
 
-
-                // ✅ Correct doc reference (even number of segments)
-                const salesRef = doc(db,
-                    "artifacts", appId,
-                    "public", "data",
-                    "salesData"
+                const salesRef = doc(db, 
+                "artifacts", appId, 
+                "public", "data" // Use 4 segments to target the 'data' document
                 );
 
                 const salesSnap = await getDoc(salesRef);
@@ -373,12 +370,10 @@
         function setupSalesDataListener() {
             if (!db) return;
 
-            //  Corrected salesData doc reference
-            const salesRef = doc(db,
-                "artifacts", appId,
-                "public", "data",
-                "salesData"
-            );
+            const salesRef = doc(db, 
+                "artifacts", appId, 
+                "public", "data" // Use 4 segments to target the 'data' document
+                );
 
             onSnapshot(salesRef, (docSnap) => {
                 if (docSnap.exists()) {

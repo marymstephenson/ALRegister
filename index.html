@@ -213,6 +213,31 @@
         </div>
     </div>
 
+    <!-- Modal for Silent Auction-->>
+    <div id="auction-modal" class="fixed inset-0 bg-navy bg-opacity-80 flex items-center justify-center p-4 z-[60] hidden">
+        <div class="bg-sto-blue p-8 rounded-[3rem] shadow-2xl max-w-md w-full border-4 border-gold">
+            <h2 class="text-3xl font-black text-navy mb-6 italic uppercase">Silent Auction Entry</h2>
+        
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-navy font-bold mb-1 ml-2">Item Name/Description</label>
+                    <input type="text" id="auction-item-name" placeholder="e.g., Signed Poster" 
+                        class="w-full p-4 rounded-full border-2 border-navy focus:border-gold outline-none font-bold text-navy">
+                </div>
+                <div>
+                    <label class="block text-navy font-bold mb-1 ml-2">Winning Bid Amount ($)</label>
+                    <input type="number" id="auction-price" placeholder="0.00" step="0.01"
+                       class="w-full p-4 rounded-full border-2 border-navy focus:border-gold outline-none font-bold text-navy">
+                </div>
+            </div>
+
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeAuctionModal()" class="flex-1 bg-white text-navy font-black py-3 rounded-full border-2 border-navy hover:bg-gray-100 transition-all">Cancel</button>
+                <button onclick="addAuctionItem()" class="flex-1 bg-navy text-white font-black py-3 rounded-full hover:bg-blue-900 transition-all">Add to Cart</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -318,6 +343,17 @@
                 button.onclick = () => addItemToCart(product);
                 productListEl.appendChild(button);
             });
+
+            // Add a special Silent Auction button at the end of the grid
+            const auctionBtn = document.createElement('button');
+            auctionBtn.className = 'bg-gold text-navy p-4 h-28 rounded-[1.5rem] shadow-lg hover:bg-yellow-400 transition-all active:scale-95 flex flex-col items-center justify-center border-2 border-navy';
+            auctionBtn.innerHTML = `
+                <span class="text-sm font-bold leading-tight uppercase tracking-wide">Silent Auction</span>
+                <span class="text-xl font-black mt-2">Manual $</span>
+            `;
+            auctionBtn.onclick = () => openAuctionModal();
+            productListEl.appendChild(auctionBtn);
+
         }
 
         function addItemToCart(product) {
@@ -494,6 +530,39 @@
                 transactionsTableBody.appendChild(tr);
             });
         }
+
+        //Silent Auction Functions
+        window.openAuctionModal = function() {
+            document.getElementById('auction-modal').classList.remove('hidden');
+            document.getElementById('auction-item-name').focus();
+        };
+
+        window.closeAuctionModal = function() {
+            document.getElementById('auction-modal').classList.add('hidden');
+            document.getElementById('auction-item-name').value = '';
+            document.getElementById('auction-price').value = '';
+        };
+
+        window.addAuctionItem = function() {
+            const nameInput = document.getElementById('auction-item-name');
+            const priceInput = document.getElementById('auction-price');
+    
+            const name = nameInput.value.trim() || "Auction Item";
+            const price = parseFloat(priceInput.value);
+
+            if (isNaN(price) || price <= 0) {
+                alert("Please enter a valid price.");
+                return;
+            }
+
+            // Add to currentCart manually
+            const auctionProduct = { name: `Auction: ${name}`, price: price };
+            currentCart.push(auctionProduct);
+            currentTotal += price;
+    
+            updateCartDisplay();
+            closeAuctionModal();
+        };
 
         // --- Event Listeners ---
         modalCloseBtn.addEventListener('click', () => {

@@ -71,21 +71,21 @@
         }
     </script>
 </head>
-<body class="bg-white text-navy flex flex-col min-h-screen">
-
-    <!-- Header with Hamburger Menu -->
-    <header class="bg-navy p-4 flex justify-between items-center shadow-lg">
-        <div onclick="showView(registerView)" class="flex items-center space-x-3 cursor-pointer group">
-            <div class="bg-white p-1 rounded-md shadow-sm">
-                <img src="images/Logo.png" class="h-8 w-auto object-contain" alt="STO Logo">
-            </div>
-            <h1 class="text-white text-2xl font-black tracking-tight group-hover:text-gold transition-colors">STO Store</h1>
+<header class="bg-navy p-4 flex justify-center items-center shadow-lg relative">
+    
+    <div onclick="showView(document.getElementById('register-view'))" class="flex items-center space-x-3 cursor-pointer group"> 
+        <div class="bg-white p-1 rounded-md shadow-sm flex items-center justify-center">
+            <img src="images/Logo.png" class="h-8 w-auto object-contain" alt="STO Logo">
         </div>
+        <h1 class="text-white text-2xl font-black tracking-tight group-hover:text-gold transition-colors">
+            STO Store
+        </h1>
+    </div>
 
-        <button id="hamburger-btn" class="focus:outline-none hover:rotate-12 transition-transform active:scale-90">
-            <img src="images/Duck.png" class="h-10 w-10 object-contain" alt="Menu">
-        </button>
-    </header>
+    <button id="hamburger-btn" class="absolute right-4 focus:outline-none hover:rotate-12 transition-transform active:scale-90">
+        <img src="images/Duck.png" class="h-10 w-10 object-contain" alt="Menu">
+    </button>
+</header>
 
     <!-- Navigation Menu (hidden by default) -->
     <nav id="nav-menu" class="absolute top-0 right-0 w-64 h-full bg-navy text-white transform translate-x-full transition-transform ease-in-out duration-300 z-40 p-6 shadow-xl">
@@ -259,12 +259,19 @@
             hamburgerBtn.classList.toggle('open');
         }
 
-        function showView(view) {
-            registerView.classList.add('hidden');
-            salesView.classList.add('hidden');
-            view.classList.remove('hidden');
-            toggleNav();
-        }
+        window.showView = function(viewElement) {
+            // 1. Hide all views
+            document.getElementById('register-view').classList.add('hidden');
+            document.getElementById('sales-view').classList.add('hidden');
+
+            // 2. Show the requested view
+            viewElement.classList.remove('hidden');
+
+            // 3. Close navigation if it's open (keeps the logic for the Duck menu)
+            if (navMenu && !navMenu.classList.contains('translate-x-full')) {
+                toggleNav();
+            }
+        };
 
         function renderProducts() {
             productListEl.innerHTML = '';

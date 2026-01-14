@@ -52,6 +52,34 @@
             opacity: 0;
             transition: opacity 0.2s ease-in-out;
         }
+        /* Style for items in the gold footer list */
+        .cart-item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 300px;
+            font-family: inherit;
+            font-weight: 500;
+            color: #001f4c; /* Navy */
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .cart-item-row:hover .item-text {
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+
+        .cart-item-row .delete-x {
+            display: none;
+            margin-left: 10px;
+            font-weight: bold;
+        }
+
+        .cart-item-row:hover .delete-x {
+            display: inline;
+        }
     </style>
     <script>
         tailwind.config = {
@@ -117,11 +145,16 @@
                     </div>
             </div>
 
-            <div class="bg-gold p-3 rounded-full flex justify-between items-center shadow-lg border-b-4 border-yellow-500">
-                <div class="ml-8">
-                    <span class="text-navy font-black text-3xl italic">Total: <span id="current-total">$0.00</span></span>
+            <div class="bg-gold p-6 rounded-[2.5rem] shadow-lg border-b-4 border-yellow-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    
+                <div class="flex flex-col w-full md:w-auto">
+                    <span class="text-navy font-black text-4xl italic mb-4">Total: <span id="current-total">$0.00</span></span>
+        
+                    <div id="cart-list" class="flex flex-col space-y-1 overflow-y-auto max-h-32 pr-4">
+                        </div>
                 </div>
-                <button id="complete-sale-btn" class="bg-navy text-white text-2xl font-black px-12 py-3 rounded-full hover:bg-blue-900 transition-all active:scale-95 shadow-md">
+
+                <button id="complete-sale-btn" class="bg-navy text-white text-2xl font-black px-12 py-4 rounded-full hover:bg-blue-900 transition-all active:scale-95 shadow-md self-center md:self-start">
                     Complete Sale
                 </button>
             </div>
@@ -300,30 +333,32 @@
         }
 
         function updateCartDisplay() {
+            const cartListEl = document.getElementById('cart-list');
             cartListEl.innerHTML = '';
-            
-            for (let i = 0; i < currentCart.length; i++) {
-                const item = currentCart[i];
-                const div = document.createElement('div');
-                div.className = 'flex justify-between items-center cart-item';
-                div.innerHTML = `
-                    <p class="text-white">${item.name}</p>
-                    <div class="flex items-center">
-                        <p class="text-gold">$${item.price.toFixed(2)}</p>
-                        <button class="remove-btn text-white text-lg ml-4 leading-none" data-index="${i}">&times;</button>
+    
+            currentCart.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'cart-item-row group';
+        
+                row.innerHTML = `
+                    <div class="item-text flex justify-between w-full text-xl">
+                        <span>${item.name}</span>
+                        <span class="ml-8">$${item.price.toFixed(2)}</span>
                     </div>
+                    <span class="delete-x text-2xl text-navy">×</span>
                 `;
-                cartListEl.appendChild(div);
-            }
-
-            cartListEl.querySelectorAll('.remove-btn').forEach(button => {
-                button.addEventListener('click', (e) => {
-                    const index = parseInt(e.target.dataset.index);
-                    removeItemFromCart(index);
-                });
+        
+                // Remove item on click
+                row.onclick = () => {
+                    currentCart.splice(index, 1);
+                    currentTotal -= item.price;
+                    updateCartDisplay();
+                };
+        
+                cartListEl.appendChild(row);
             });
 
-            currentTotalEl.textContent = `$${currentTotal.toFixed(2)}`;
+            document.getElementById('current-total').textContent = `$${currentTotal.toFixed(2)}`;
         }
 
         async function completeSale() {

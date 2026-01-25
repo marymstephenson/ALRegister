@@ -686,10 +686,34 @@
             if (!confirm("Are you sure you want to delete this sale? This cannot be undone.")) return;
 
             try {
-                await deleteDoc(doc(db, "artifacts", appId, "public", "data", "transactions", docId));
-                showModal("Transaction Deleted");
-                // Re-run your sales data loader to refresh the list
-                loadSalesData(); 
+                // 1. Get the transaction data BEFORE deleting it
+                const transRef = doc(db, "artifacts", appId, "public", "data", "transactions", docId);
+                const transSnap = await getDoc(transRef);
+                
+                if (transSnap.exists()) {
+                    const data = transSnap.data();
+                    
+                    // 2. Loop through items to find any ducks that need restoring
+                    if (data.items && Array.isArray(data.items)) {
+                        for (const item of data.items) {
+                            if (item.groupId && item.slot) {
+                                const soldRef = doc(db, "artifacts", appId, "public", "data", "soldDucks", item.groupId);
+                                
+                                // Set the specific slot back to false
+                                await setDoc(soldRef, {
+                                    [`${item.slot}_sold`]: false
+                                }, { merge: true });
+                                console.log(`Restored duck: ${item.name} (${item.slot})`);
+                            }
+                        }
+                    }
+                }
+
+                // 3. Now delete the transaction record
+                await deleteDoc(transRef);
+                
+                showModal("Transaction Deleted & Ducks Restored");
+                // No need to manually call loadSalesData() if you have an onSnapshot listener running
             } catch (error) {
                 console.error("Error deleting transaction: ", error);
                 showModal("Failed to delete transaction.");

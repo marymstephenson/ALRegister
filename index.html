@@ -178,7 +178,7 @@
 
     <div class="bg-blue-100 p-6 md:p-8 rounded-[3rem] shadow-inner flex-grow">
         <h3 class="text-2xl font-black text-navy mb-6 flex items-center">
-            <span class="mr-2">📋</span> Transaction History
+            <span class="mr-2"></span> Transaction History
         </h3>
         
         <div class="overflow-hidden rounded-2xl border border-navy border-opacity-10 bg-white shadow-sm">
@@ -188,6 +188,7 @@
                         <th class="py-4 px-6 text-left text-sm font-bold uppercase tracking-wider">Time</th>
                         <th class="py-4 px-6 text-left text-sm font-bold uppercase tracking-wider">Items</th>
                         <th class="py-4 px-6 text-right text-sm font-bold uppercase tracking-wider">Total</th>
+                        <th class="py-4 px-6 text-right text-sm font-bold uppercase tracking-wider">Action</th>
                     </tr>
                 </thead>
                 <tbody id="transactions-table-body" class="divide-y divide-blue-100 text-navy">
@@ -213,7 +214,7 @@
         </div>
     </div>
 
-    <!-- Modal for Silent Auction-->>
+    <!-- Modal for Silent Auction-->
     <div id="auction-modal" class="fixed inset-0 bg-navy bg-opacity-80 flex items-center justify-center p-4 z-[60] hidden">
         <div class="bg-sto-blue p-8 rounded-[3rem] shadow-2xl max-w-md w-full border-4 border-gold">
             <h2 class="text-3xl font-black text-navy mb-6 italic uppercase">Silent Auction Entry</h2>
@@ -238,10 +239,29 @@
         </div>
     </div>
 
+    <!-- Modal for Duck View-->
+    <div id="duck-modal" class="fixed inset-0 bg-navy bg-opacity-90 flex items-center justify-center p-4 z-[70] hidden">
+    <div class="bg-sto-blue p-8 rounded-[3rem] shadow-2xl max-w-2xl w-full border-4 border-gold flex flex-col max-h-[90vh]">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-3xl font-black text-navy italic uppercase">Duck Duo Checker</h2>
+            <button onclick="closeDuckModal()" class="text-navy text-4xl font-bold hover:text-red-600 transition-colors">&times;</button>
+        </div>
+        
+        <div class="mb-6">
+            <input type="text" id="duck-search-input" onkeyup="searchDucks()" placeholder="Type Duck Name..." 
+                   class="w-full p-5 rounded-full border-4 border-navy focus:border-gold outline-none font-bold text-navy text-xl shadow-lg">
+        </div>
+
+        <div id="duck-results" class="space-y-4 overflow-y-auto pr-2 flex-grow">
+            <p class="text-navy text-center font-bold opacity-50 italic">Search results will appear here...</p>
+        </div>
+    </div>
+</div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, setLogLevel, deleteDoc, getDocs} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Global Variables (provided by the environment) ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -331,6 +351,117 @@
             }
         };
 
+        // Price mapping by category
+        const duckPrices = {
+            "Regular": 2.00,
+            "Valentines": 3.00,
+            "Glitter": 3.00,
+            "Light-Up": 5.00
+        };
+
+        // Example data structure based on your CSVs
+        const allDucks = [
+            { id: "reg_01", p1: "Pirate Duck", p2: "Parrot Duck", p3: null, cat: "Regular" },
+            { id: "reg_02", p1: "Doctor Duck", p2: "Nurse Duck", p3: "Hospital Duck", cat: "Regular" }, // Trio
+            { id: "glo_01", p1: "Neon Duck", p2: "Glow Duck", p3: null, cat: "Light-Up" },
+            { id: "glo_02", p1: "Pirate Duck", p2: "Parrot Duck", p3: null, cat: "Light-Up" },
+            { id: "val_01", p1: "Heart Duck", p2: "Cupid Duck", p3: "Rose Duck", cat: "Valentines" } // Trio
+        ];
+
+        window.openDuckModal = () => document.getElementById('duck-modal').classList.remove('hidden');
+        window.closeDuckModal = () => document.getElementById('duck-modal').classList.add('hidden');
+
+        let latestSearchId = 0; // Global tracker to prevent race conditions
+
+        window.searchDucks = async function() {
+            const searchId = ++latestSearchId; // Assign a unique ID to this specific search attempt
+            const query = document.getElementById('duck-search-input').value.toLowerCase().trim();
+            const resultsContainer = document.getElementById('duck-results');
+            
+            resultsContainer.innerHTML = ''; 
+
+            if (query.length < 2) return;
+
+            // Filter matches from your CSV data
+            const matches = allDucks.filter(group => 
+                (group.p1 && group.p1.toLowerCase().includes(query)) || 
+                (group.p2 && group.p2.toLowerCase().includes(query)) ||
+                (group.p3 && group.p3.toLowerCase().includes(query))
+            );
+
+            if (matches.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-navy text-center font-bold">No ducks found.</p>';
+                return;
+            }
+
+            for (const group of matches) {
+                // THE GUARD: If a newer search has started, stop this old one immediately
+                if (searchId !== latestSearchId) return; 
+
+                const soldRef = doc(db, "artifacts", appId, "public", "data", "soldDucks", group.id);
+                const soldSnap = await getDoc(soldRef);
+                const soldData = soldSnap.exists() ? soldSnap.data() : { p1_sold: false, p2_sold: false, p3_sold: false };
+
+                // Ensure we haven't been superseded while waiting for Firebase
+                if (searchId !== latestSearchId) return;
+
+                const card = document.createElement('div');
+                card.className = 'bg-white p-6 rounded-2xl border-4 border-navy shadow-lg mb-4';
+                
+                let partnerHTML = `
+                    <div class="mb-3 flex justify-between items-center">
+                        <span class="text-[10px] font-black uppercase bg-navy text-white px-2 py-0.5 rounded-full">
+                            ${group.cat} Category
+                        </span>
+                    </div>
+                    <div class="space-y-3">`;
+                
+                // Handle duos and trios dynamically
+                const partners = [
+                    { key: 'p1', name: group.p1 },
+                    { key: 'p2', name: group.p2 },
+                    { key: 'p3', name: group.p3 }
+                ].filter(p => p.name); // Only show slots that actually have a duck name
+
+                partners.forEach(p => {
+                    const isSold = soldData[`${p.key}_sold`];
+                    partnerHTML += `
+                        <div class="flex justify-between items-center p-3 rounded-xl ${isSold ? 'bg-red-50 opacity-60' : 'bg-green-50'}">
+                            <span class="text-lg font-black ${isSold ? 'text-red-800 line-through' : 'text-navy'}">
+                                ${p.name}
+                            </span>
+                            ${isSold ? 
+                                '<span class="text-xs font-bold text-red-600 uppercase">Sold</span>' : 
+                                `<button onclick="addSingleDuckToCart('${group.id}', '${p.name}', '${p.key}', '${group.cat}')" 
+                                        class="bg-gold text-navy font-bold text-sm px-5 py-2 rounded-full hover:bg-yellow-400">
+                                        Sell ($${duckPrices[group.cat].toFixed(2)})
+                                </button>`
+                            }
+                        </div>
+                    `;
+                });
+                
+                partnerHTML += `</div>`;
+                card.innerHTML = partnerHTML;
+                resultsContainer.appendChild(card);
+            }
+        };
+
+        window.addSingleDuckToCart = function(groupId, duckName, slot, category) {
+            const price = duckPrices[category] || 2.00;
+    
+            currentCart.push({ 
+                name: `${category}: ${duckName}`, 
+                price: price, 
+                groupId: groupId, 
+                slot: slot // Track if it's p1, p2, or p3
+            });
+    
+            currentTotal += price;
+            updateCartDisplay();
+            closeDuckModal();
+        };
+
         function renderProducts() {
             productListEl.innerHTML = '';
             products.forEach(product => {
@@ -344,12 +475,19 @@
                 productListEl.appendChild(button);
             });
 
-            // Add a special Silent Auction button at the end of the grid
+            // Add the yellow Duck Duo button to the grid
+            const duckBtn = document.createElement('button');
+            duckBtn.className = 'bg-gold text-navy p-4 h-28 rounded-[1.5rem] shadow-lg hover:bg-yellow-400 transition-all active:scale-95 flex flex-col items-center justify-center border-2 border-navy';
+            duckBtn.innerHTML = `<span class="text-sm font-bold uppercase">Duck Duo</span><span class="text-xl font-black mt-1">🦆 Checker</span>`;
+            duckBtn.onclick = () => openDuckModal();
+            productListEl.appendChild(duckBtn);
+
+            // Keep your Silent Auction button below it
             const auctionBtn = document.createElement('button');
             auctionBtn.className = 'bg-gold text-navy p-4 h-28 rounded-[1.5rem] shadow-lg hover:bg-yellow-400 transition-all active:scale-95 flex flex-col items-center justify-center border-2 border-navy';
             auctionBtn.innerHTML = `
                 <span class="text-sm font-bold leading-tight uppercase tracking-wide">Silent Auction</span>
-                <span class="text-xl font-black mt-2">Manual $</span>
+                <span class="text-xl font-black mt-1">Manual $</span>
             `;
             auctionBtn.onclick = () => openAuctionModal();
             productListEl.appendChild(auctionBtn);
@@ -397,58 +535,48 @@
             document.getElementById('current-total').textContent = `$${currentTotal.toFixed(2)}`;
         }
 
+        // Inside your completeSale function:
         async function completeSale() {
+            // 1. Check if the cart is empty
             if (currentCart.length === 0) {
-                showMessage("The cart is empty! Please add some items.");
-                return;
-            }
-
-            if (!db) {
-                showMessage("Offline mode: Sale not saved to database.");
-                currentCart = [];
-                currentTotal = 0;
-                updateCartDisplay();
+                showModal("Your cart is empty!");
                 return;
             }
 
             try {
-                const newTransaction = {
+                // 2. Prepare the transaction record
+                const transactionData = {
+                    items: currentCart,
                     total: currentTotal,
-                    items: JSON.stringify(currentCart),
-                    date: new Date().toISOString()
+                    timestamp: new Date(), // Using JS Date for testing, or serverTimestamp() if imported
                 };
 
-                //  Save the transaction in a subcollection
-                await addDoc(collection(
-                    db,
-                    "artifacts", appId,
-                    "public", "data",
-                    "transactions"
-                ), newTransaction);
+                // 3. Save the transaction to Firestore
+                // Ensure 'db', 'appId', 'addDoc', and 'collection' are properly imported at the top
+                await addDoc(collection(db, "artifacts", appId, "public", "data", "transactions"), transactionData);
 
-                const salesRef = doc(db, 
-                "artifacts", appId, 
-                "public", "data" // Use 4 segments to target the 'data' document
-                );
+                // 4. Update individual Duck Status if applicable
+                for (const item of currentCart) {
+                    // Only runs if the item came from the Duck Duo Checker
+                    if (item.groupId && item.slot) {
+                        const soldRef = doc(db, "artifacts", appId, "public", "data", "soldDucks", item.groupId);
+                        
+                        // This marks p1_sold, p2_sold, or p3_sold as true specifically
+                        await setDoc(soldRef, {
+                            [`${item.slot}_sold`]: true
+                        }, { merge: true });
+                    }
+                }
 
-                const salesSnap = await getDoc(salesRef);
-                let salesData = salesSnap.exists()
-                    ? salesSnap.data()
-                    : { totalRevenue: 0, totalTransactions: 0 };
-
-                salesData.totalRevenue += currentTotal;
-                salesData.totalTransactions += 1;
-
-                await setDoc(salesRef, salesData, { merge: true });
-
+                // 5. Success: Reset the UI
                 currentCart = [];
                 currentTotal = 0;
                 updateCartDisplay();
-                showMessage(`Sale Complete! Total: $${newTransaction.total.toFixed(2)}`);
+                showModal("Sale Completed Successfully!");
 
-            } catch (e) {
-                console.error("Error completing sale:", e);
-                showMessage("There was an error saving the sale data. Please check the console for details.");
+            } catch (error) {
+                console.error("Error completing sale: ", error);
+                showModal("Error: Sale could not be saved. Check console for details.");
             }
         }
 
@@ -456,49 +584,49 @@
         function setupSalesDataListener() {
             if (!db) return;
 
-            const salesRef = doc(db, 
-                "artifacts", appId, 
-                "public", "data" // Use 4 segments to target the 'data' document
-                );
-
-            onSnapshot(salesRef, (docSnap) => {
-                if (docSnap.exists()) {
-                const data = docSnap.data();
-                    totalTransactionsEl.textContent = data.totalTransactions || 0;
-                    totalRevenueEl.textContent = `$${(data.totalRevenue || 0).toFixed(2)}`;
-                } else {
-                    totalTransactionsEl.textContent = '0';
-                    totalRevenueEl.textContent = '$0.00';
-                }
-            }, (error) => {
-                console.error("Error listening to sales data:", error);
-            });
-
-            //  Transactions subcollection stays the same
-            // In setupSalesDataListener()
-            const transactionsRef = collection(
-                db,
-                "artifacts", appId,
-                "public", "data",
-                "transactions"
-        );
+            const transactionsRef = collection(db, "artifacts", appId, "public", "data", "transactions");
 
             onSnapshot(transactionsRef, (snapshot) => {
                 const history = [];
                 snapshot.forEach(doc => {
                     const data = doc.data();
+                    
+                    // Fix: Handle both Firestore Timestamps and old Date strings
+                    let displayDate = 'N/A';
+                    if (data.timestamp && data.timestamp.toDate) {
+                        displayDate = data.timestamp.toDate().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    } else if (data.date) {
+                        displayDate = new Date(data.date).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    }
+
+                    // Fix: Handle items that were saved as JSON strings vs direct Arrays
+                    let itemsArray = [];
+                    if (Array.isArray(data.items)) {
+                        itemsArray = data.items;
+                    } else if (typeof data.items === 'string') {
+                        try { itemsArray = JSON.parse(data.items); } catch(e) { itemsArray = []; }
+                    }
+
                     history.push({
-                        date: data.date ? new Date(data.date).toLocaleString() : 'N/A',
-                        total: data.total,
-                        items: JSON.parse(data.items)
+                        id: doc.id,
+                        date: displayDate,
+                        total: Number(data.total) || 0,
+                        items: itemsArray
                     });
                 });
-                // Sort by date descending (newest first)
+
+                // Sort: Newest first
                 history.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                // Calculate Totals locally for accuracy
+                const totalCount = history.length;
+                const totalRev = history.reduce((sum, t) => sum + t.total, 0);
+
+                document.getElementById('total-transactions').textContent = totalCount;
+                document.getElementById('total-revenue').textContent = `$${totalRev.toFixed(2)}`;
+
                 renderTransactionTable(history);
-            }, (error) => {
-                console.error("Error listening to transaction history:", error);
-            });
+            }, (error) => console.error("Error history listener:", error));
         }
 
 
@@ -508,28 +636,65 @@
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-white border-opacity-20 last:border-b-0';
                 
+                // 1. Date Column
                 const dateTd = document.createElement('td');
                 dateTd.className = 'py-2 px-4';
                 dateTd.textContent = transaction.date;
                 
+                // 2. Items Column (The Fix is here!)
                 const itemsTd = document.createElement('td');
                 itemsTd.className = 'py-2 px-4';
-                const itemCounts = transaction.items.reduce((acc, item) => {
-                    acc[item.name] = (acc[item.name] || 0) + 1;
+
+                // Safety check: Ensure items is an array before calling reduce
+                const itemsArray = Array.isArray(transaction.items) ? transaction.items : [];
+
+                const itemCounts = itemsArray.reduce((acc, item) => {
+                    const itemName = typeof item === 'object' ? item.name : item;
+                    acc[itemName] = (acc[itemName] || 0) + 1;
                     return acc;
                 }, {});
-                itemsTd.textContent = Object.keys(itemCounts).map(item => `${item} x${itemCounts[item]}`).join(', ');
 
+                itemsTd.textContent = Object.keys(itemCounts)
+                    .map(item => `${item} x${itemCounts[item]}`)
+                    .join(', ');
+
+                // 3. Total Column
                 const totalTd = document.createElement('td');
-                totalTd.className = 'py-2 px-4';
+                totalTd.className = 'py-2 px-4 font-bold';
                 totalTd.textContent = `$${transaction.total.toFixed(2)}`;
+
+                // 4. NEW: Delete Button Column (For your Feb 13th Goal)
+                const actionTd = document.createElement('td');
+                actionTd.className = 'py-2 px-4 text-right';
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '🗑️'; // Use a trash icon or text "Delete"
+                deleteBtn.className = 'hover:scale-125 transition-transform cursor-pointer opacity-70 hover:opacity-100';
+                deleteBtn.onclick = () => deleteTransaction(transaction.id);
+                actionTd.appendChild(deleteBtn);
                 
                 tr.appendChild(dateTd);
                 tr.appendChild(itemsTd);
                 tr.appendChild(totalTd);
+                tr.appendChild(actionTd); // Add the new action column
                 transactionsTableBody.appendChild(tr);
             });
         }
+
+        //Delete Transaction function
+        window.deleteTransaction = async function(docId) {
+            console.log("Attempting to delete document with ID:", docId);
+            if (!confirm("Are you sure you want to delete this sale? This cannot be undone.")) return;
+
+            try {
+                await deleteDoc(doc(db, "artifacts", appId, "public", "data", "transactions", docId));
+                showModal("Transaction Deleted");
+                // Re-run your sales data loader to refresh the list
+                loadSalesData(); 
+            } catch (error) {
+                console.error("Error deleting transaction: ", error);
+                showModal("Failed to delete transaction.");
+            }
+        };
 
         //Silent Auction Functions
         window.openAuctionModal = function() {
@@ -563,6 +728,11 @@
             updateCartDisplay();
             closeAuctionModal();
         };
+
+        function showModal(message) {
+            // You can replace this with your custom modal logic later
+            alert(message);
+        }
 
         // --- Event Listeners ---
         modalCloseBtn.addEventListener('click', () => {

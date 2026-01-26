@@ -98,6 +98,43 @@
             background: #FFC700;
         }
 
+        @keyframes duck-explode {
+            0% { transform: scale(1) rotate(0deg); opacity: 1; }
+            50% { transform: scale(1.5) rotate(15deg); opacity: 1; filter: brightness(1.5); }
+            100% { transform: scale(15); opacity: 0; filter: blur(20px); }
+        }
+
+        .animate-explode {
+            /* Adding 'important' here to beat Tailwind's transition properties */
+            animation: duck-explode 0.8s ease-out forwards !important;
+        }
+
+        #completion-overlay.active {
+            display: flex !important;
+            position: fixed !important;
+            inset: 0 !important; /* Forces full-screen coverage */
+            width: 100vw !important;
+            height: 100vh !important;
+            justify-content: center !important;
+            align-items: center !important;
+            background-color: rgba(0, 31, 76, 0.98) !important;
+            z-index: 999999 !important; /* Puts it above everything else */
+            pointer-events: auto !important; /* Allows the overlay to be interactive */
+        }
+
+        #undo-sale-btn {
+            pointer-events: auto !important; /* Essential: makes the button clickable */
+            cursor: pointer !important;
+            z-index: 1000000 !important;
+            position: relative !important;
+            transition: all 0.2s ease-in-out;
+        }
+
+        #undo-sale-btn:hover {
+            background-color: #FFD700 !important; /* Gold */
+            transform: scale(1.1);
+        }
+
     </style>
     <script>
         tailwind.config = {
@@ -117,20 +154,30 @@
         }
     </script>
 </head>
-<header class="bg-navy p-4 flex justify-center items-center shadow-lg relative">
+<header class="bg-navy p-4 flex justify-between items-center shadow-lg relative">
     
+    <div class="flex-1 flex justify-start">
+        <button id="auth-lock-btn" class="flex items-center justify-center w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full transition-all group">
+            <span id="lock-icon" class="text-lg">🔒</span>
+            <span id="lock-status" class="hidden">Locked</span>
+        </button>
+    </div>
+
     <div onclick="showView(document.getElementById('register-view'))" class="flex items-center space-x-3 cursor-pointer group"> 
         <div class="bg-white p-1 rounded-md shadow-sm flex items-center justify-center">
             <img src="images/Logo.png" class="h-8 w-auto object-contain" alt="STO Logo">
         </div>
-        <h1 class="text-white text-2xl font-black tracking-tight group-hover:text-gold transition-colors">
+        <h1 class="text-white text-2xl font-black tracking-tight group-hover:text-gold transition-colors italic uppercase">
             STO Store
         </h1>
     </div>
 
-    <button id="hamburger-btn" class="absolute right-4 focus:outline-none hover:rotate-12 transition-transform active:scale-90">
-        <img src="images/Duck.png" class="h-10 w-10 object-contain" alt="Menu">
-    </button>
+    <div class="flex-1 flex justify-end">
+        <button id="hamburger-btn" class="focus:outline-none hover:rotate-12 transition-transform active:scale-90">
+            <img src="images/Duck.png" class="h-10 w-10 object-contain" alt="Menu">
+        </button>
+    </div>
+
 </header>
 
     <!-- Navigation Menu (hidden by default) -->
@@ -176,6 +223,15 @@
                 <button id="complete-sale-btn" class="bg-navy text-white text-2xl font-black px-12 py-4 rounded-full hover:bg-blue-900 transition-all active:scale-95 shadow-md self-center md:self-start">
                     Complete Sale
                 </button>
+
+                <div class="flex items-center justify-between mb-4 p-3 bg-gray-100 rounded-xl">
+                    <span class="text-navy font-bold text-sm uppercase">Redemption Mode</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="redemption-toggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-navy after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                </div>
+
             </div>
     
             <div id="cart-list" class="mt-4 px-6 text-navy text-sm font-bold opacity-70"></div>
@@ -318,12 +374,13 @@
             <p class="text-navy text-center font-bold opacity-50 italic">Search results will appear here...</p>
         </div>
     </div>
+
 </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, setLogLevel, deleteDoc, getDocs} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, setLogLevel, deleteDoc, getDocs, orderBy} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Global Variables (provided by the environment) ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -342,7 +399,7 @@
 
         let app, db, auth;
         let userId = 'unknown';
-        
+        let duckPrices = { "Regular": 2.00, "Valentines": 3.00, "Glitter": 3.00, "Light-Up": 5.00 }; // Your starting defaults        
         // --- DOM Elements ---
         const productListEl = document.getElementById('product-list');
         const cartListEl = document.getElementById('cart-list');
@@ -402,6 +459,49 @@
             hamburgerBtn.classList.toggle('open');
         }
 
+        let isAuthenticated = localStorage.getItem('festival_auth') === 'true';
+
+        // 1. Initialize UI state on load
+        function updateAuthUI() {
+            const statusText = document.getElementById('lock-status');
+            const lockIcon = document.getElementById('lock-icon');
+            
+            // Safety guard to prevent the "Cannot set properties of null" error
+            if (!lockIcon) return;
+
+            if (isAuthenticated) {
+                if (statusText) statusText.textContent = "Unlocked";
+                lockIcon.textContent = "🔓";
+            } else {
+                if (statusText) statusText.textContent = "Locked";
+                lockIcon.textContent = "🔒";
+            }
+        }
+        updateAuthUI();
+
+        // 2. The "Unlock" Event
+        document.getElementById('auth-lock-btn').onclick = () => {
+            if (isAuthenticated) {
+                if(confirm("Lock the register? (Guest mode only)")) {
+                    isAuthenticated = false;
+                    localStorage.removeItem('festival_auth');
+                    updateAuthUI();
+                    showModal("Register Locked");
+                }
+                return;
+            }
+
+            const code = prompt("Enter Festival Access Key:");
+            if (code === "Thespis1929") {
+                isAuthenticated = true;
+                localStorage.setItem('festival_auth', 'true');
+                updateAuthUI();
+                showModal("Access Granted: Register Enabled");
+            } else {
+                showModal("Invalid Key");
+            }
+        };
+
         window.showView = function(viewElement) {
             // 1. Hide all views
             registerView.classList.add('hidden');
@@ -422,22 +522,7 @@
             }
         };
 
-        // Price mapping by category
-        const duckPrices = {
-            "Regular": 2.00,
-            "Valentines": 3.00,
-            "Glitter": 3.00,
-            "Light-Up": 5.00
-        };
-
-        // Example data structure based on your CSVs
-        const allDucks = [
-            { id: "reg_01", p1: "Pirate Duck", p2: "Parrot Duck", p3: null, cat: "Regular" },
-            { id: "reg_02", p1: "Doctor Duck", p2: "Nurse Duck", p3: "Hospital Duck", cat: "Regular" }, // Trio
-            { id: "glo_01", p1: "Neon Duck", p2: "Glow Duck", p3: null, cat: "Light-Up" },
-            { id: "glo_02", p1: "Pirate Duck", p2: "Parrot Duck", p3: null, cat: "Light-Up" },
-            { id: "val_01", p1: "Heart Duck", p2: "Cupid Duck", p3: "Rose Duck", cat: "Valentines" } // Trio
-        ];
+        let allDucks = [];
 
         window.openDuckModal = () => document.getElementById('duck-modal').classList.remove('hidden');
         window.closeDuckModal = () => document.getElementById('duck-modal').classList.add('hidden');
@@ -519,18 +604,34 @@
         };
 
         window.addSingleDuckToCart = function(groupId, duckName, slot, category) {
-            const price = duckPrices[category] || 2.00;
-    
+            // 1. Get the normal price
+            let price = duckPrices[category] || 2.00;
+            
+            // 2. Check the toggle
+            const redemptionToggle = document.getElementById('redemption-toggle');
+            const isRedemption = redemptionToggle ? redemptionToggle.checked : false;
+
+            // 3. Override price if toggle is active
+            if (isRedemption) {
+                price = 0;
+            }
+
             currentCart.push({ 
                 name: `${category}: ${duckName}`, 
                 price: price, 
                 groupId: groupId, 
-                slot: slot // Track if it's p1, p2, or p3
+                slot: slot,
+                isVoucher: isRedemption // Helps track for the festival audit!
             });
-    
+
             currentTotal += price;
             updateCartDisplay();
             closeDuckModal();
+
+            // 4. Auto-reset toggle so the next sale isn't accidentally $0
+            if (isRedemption && redemptionToggle) {
+                redemptionToggle.checked = false;
+            }
         };
 
         function renderProducts() {
@@ -566,14 +667,41 @@
         }
 
         function addItemToCart(product) {
-            currentCart.push(product);
-            currentTotal += product.price;
+            // 1. Grab the toggle element
+            const redemptionToggle = document.getElementById('redemption-toggle');
+            const isRedemption = redemptionToggle ? redemptionToggle.checked : false;
+
+            // 2. Create a "cart instance" of the product
+            // We use the spread operator (...) to avoid changing the original product price
+            const itemToAdd = { 
+                ...product, 
+                price: isRedemption ? 0 : product.price,
+                isVoucher: isRedemption // Useful for later reporting!
+            };
+
+            // 3. Update the cart and total
+            currentCart.push(itemToAdd);
+            currentTotal += itemToAdd.price;
+
+            // 4. UI Refresh
             updateCartDisplay();
+
+            // 5. Optional: Auto-reset toggle so the next item isn't accidentally $0
+            if (isRedemption && redemptionToggle) {
+                redemptionToggle.checked = false;
+            }
         }
 
         function removeItemFromCart(index) {
+            // 1. Remove the item and capture it
             const removedItem = currentCart.splice(index, 1)[0];
-            currentTotal -= removedItem.price;
+
+            // 2. Subtract the price that was actually assigned to THIS instance
+            if (removedItem) {
+                currentTotal -= removedItem.price;
+            }
+
+            // 3. UI Refresh
             updateCartDisplay();
         }
 
@@ -606,57 +734,105 @@
             document.getElementById('current-total').textContent = `$${currentTotal.toFixed(2)}`;
         }
 
-        // Inside your completeSale function:
+        let lastSaleId = null;
+        let lastSaleItems = [];
+        let celebrationTimer = null;
+
         async function completeSale() {
-            // 1. Check if the cart is empty
-            if (currentCart.length === 0) {
-                showModal("Your cart is empty!");
+            if (!isAuthenticated) {
+                showModal("System Locked: Enter Key to Sale");
                 return;
             }
+            
+            if (currentCart.length === 0) return;
+
+            const itemsToSave = [...currentCart];
+            const totalToSave = currentTotal;
 
             try {
-                // 2. Prepare the transaction record
-                const transactionData = {
-                    items: currentCart,
-                    total: currentTotal,
-                    timestamp: new Date(), // Using JS Date for testing, or serverTimestamp() if imported
-                };
+                // We use a simple string for the date now
+                const docRef = await addDoc(collection(db, "sales"), {
+                    items: itemsToSave,
+                    total: totalToSave,
+                    date: new Date().toLocaleString(),
+                    userId: userId,
+                    accessKey: "Thespis1929"
+                });
 
-                // 3. Save the transaction to Firestore
-                // Ensure 'db', 'appId', 'addDoc', and 'collection' are properly imported at the top
-                await addDoc(collection(db, "artifacts", appId, "public", "data", "transactions"), transactionData);
+                lastSaleId = docRef.id;
+                lastSaleItems = [...currentCart];
 
-                // 4. Update individual Duck Status if applicable
-                for (const item of currentCart) {
-                    // Only runs if the item came from the Duck Duo Checker
-                    if (item.groupId && item.slot) {
-                        const soldRef = doc(db, "artifacts", appId, "public", "data", "soldDucks", item.groupId);
-                        
-                        // This marks p1_sold, p2_sold, or p3_sold as true specifically
-                        await setDoc(soldRef, {
-                            [`${item.slot}_sold`]: true
-                        }, { merge: true });
-                    }
-                }
+                console.log("Sale recorded with ID:", lastSaleId);
 
-                // 5. Success: Reset the UI
                 currentCart = [];
                 currentTotal = 0;
                 updateCartDisplay();
-                showModal("Sale Completed Successfully!");
 
-            } catch (error) {
-                console.error("Error completing sale: ", error);
-                showModal("Error: Sale could not be saved. Check console for details.");
+                window.showCelebration();
+
+            } catch (err) {
+                console.error("Sale failed:", err);
+                alert("Transaction failed: " + err.message);
             }
         }
+
+        window.showCelebration = function() {
+            const overlay = document.getElementById('completion-overlay');
+            const duck = document.getElementById('exploding-duck');
+
+            if (!overlay) return;
+
+            if (duck) {
+                duck.classList.remove('animate-explode');
+                // We keep this line; it's a necessary 1ms cost for the animation to work
+                void duck.offsetWidth; 
+                duck.classList.add('animate-explode');
+            }
+
+            setTimeout(() => {
+                overlay.classList.remove('active');
+                overlay.classList.add('hidden');
+            }, 4000);
+
+            overlay.classList.add('active');
+            overlay.classList.remove('hidden');
+
+        };
+
+        function hideCelebration() {
+            const overlay = document.getElementById('completion-overlay');
+            if (overlay) {
+                overlay.style.display = 'none';
+                overlay.classList.add('hidden');
+            }
+        }
+
+        // THE UNDO LOGIC
+        document.getElementById('undo-sale-btn').addEventListener('click', async () => {
+            if (!lastSaleId) return;
+            
+            // We reuse the deleteTransaction function to keep the code DRY
+            await window.deleteTransaction(lastSaleId);
+            
+            // Restore the cart locally for the STO leader
+            currentCart = [...lastSaleItems];
+            currentTotal = currentCart.reduce((sum, item) => sum + (item.price || 0), 0);
+            updateCartDisplay();
+            
+            // Close the overlay
+            const overlay = document.getElementById('completion-overlay');
+            overlay.classList.remove('active');
+            overlay.classList.add('hidden');
+            
+            lastSaleId = null;
+        });
 
 
         function setupSalesDataListener() {
             if (!db) return;
 
-            const transactionsRef = collection(db, "artifacts", appId, "public", "data", "transactions");
-
+            const transactionsRef = query(collection(db, "sales"), orderBy("date", "desc"));
+            
             onSnapshot(transactionsRef, (snapshot) => {
                 // 1. Update our "Global Source of Truth" for sorting/filtering
                 lastFetchedHistory = []; 
@@ -666,14 +842,20 @@
                     
                     // Handle Dates (Hybrid support for old string data and new Timestamps)
                     let displayDate = 'N/A';
-                    let dateObject = new Date(0); // Fallback to epoch if everything fails
-                    
-                    if (data.timestamp && data.timestamp.toDate) {
-                        dateObject = data.timestamp.toDate();
-                        displayDate = dateObject.toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    } else if (data.date) {
-                        dateObject = new Date(data.date);
-                        displayDate = dateObject.toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    let dateObject = data.date ? new Date(data.date) : new Date();
+
+                    if (!isNaN(dateObject)) {
+                        const month = dateObject.getMonth() + 1;
+                        const day = dateObject.getDate();
+                        let hours = dateObject.getHours();
+                        const minutes = dateObject.getMinutes().toString().padStart(2, '0');
+                        const ampm = hours >= 12 ? 'pm' : 'am';
+                        
+                        hours = hours % 12;
+                        hours = hours ? hours : 12; // Handle midnight (0) as 12
+
+                        // Result: "1/26 1:18 pm"
+                        displayDate = `${month}/${day} ${hours}:${minutes}${ampm}`;
                     }
 
                     // Handle Items (Hybrid support for strings vs arrays)
@@ -715,6 +897,20 @@
             }, (error) => console.error("Error history listener:", error));
         }
 
+        const formatTimestamp = (ts) => {
+            if (!ts) return 'Just now';
+            
+            // Convert Firebase Timestamp object to JS Date
+            const date = ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts);
+            
+            // Format for readability (e.g., Feb 13, 12:30 PM)
+            return date.toLocaleString([], {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        };
 
         function renderTransactionTable(history) {
             transactionsTableBody.innerHTML = '';
@@ -724,8 +920,8 @@
                 
                 // 1. Date Column
                 const dateTd = document.createElement('td');
-                dateTd.className = 'py-2 px-4';
-                dateTd.textContent = transaction.date;
+                dateTd.className = 'py-2 px-4 text-navy text-sm';
+                dateTd.textContent = transaction.date || "Unknown Date";
                 
                 // 2. Items Column (The Fix is here!)
                 const itemsTd = document.createElement('td');
@@ -789,8 +985,13 @@
 
         //Delete Transaction function
         window.deleteTransaction = async function(docId) {
+            if (!isAuthenticated) {
+                showModal("Locked: Enter Key to Delete");
+                return;
+            }
+            
             try {
-                const transRef = doc(db, "artifacts", appId, "public", "data", "transactions", docId);
+                const transRef = doc(db, "sales", docId);
                 const transSnap = await getDoc(transRef);
                 
                 if (transSnap.exists()) {
@@ -1101,6 +1302,11 @@
             salesView.classList.add('hidden');
             itemsView.classList.add('hidden');
 
+            document.addEventListener('DOMContentLoaded', () => {
+                updateAuthUI();
+                renderProducts(); // Ensures buttons show up even if Firebase is slow
+            });
+
             const firebaseConfig = localFirebaseConfig;
             
             // Set a timeout to proceed in offline mode if online initialization takes too long
@@ -1123,6 +1329,7 @@
                         clearTimeout(timeoutId);
                         if (user) {
                             userId = user.uid;
+                            await loadInventoryFromFile();
                             renderProducts();
                             setupSalesDataListener();
                             loadingState.classList.add('hidden');
@@ -1155,9 +1362,91 @@
                 showMessage("There was an error loading the app. Please check the console for details.");
             }
         }
+
+        const categoryConfigs = [
+            { file: 'Duck Duos 2025 - Regular Ducks.csv', cat: 'Regular', price: 2.00 },
+            { file: 'Duck Duos 2025 - Valentines Ducks.csv', cat: 'Valentines', price: 3.00 },
+            { file: 'Duck Duos 2025 - Glitter Ducks.csv', cat: 'Glitter', price: 3.00 },
+            { file: 'Duck Duos 2025 - Light-Up Ducks.csv', cat: 'Light-Up', price: 5.00 }
+        ];
+
+        async function loadInventoryFromFile() {
+            try {
+                // Reset our global data buckets
+                allDucks = [];
+                window.products = [];
+                
+                // Fetch all files at once for speed
+                const fetchPromises = categoryConfigs.map(config => 
+                    fetch(config.file)
+                        .then(response => response.text())
+                        .then(text => ({ text, config }))
+                );
+
+                const results = await Promise.all(fetchPromises);
+
+                results.forEach(({ text, config }) => {
+                    const rows = text.split('\n').filter(line => line.trim() !== "");
+                    
+                    // Add the category button to the register
+                    window.products.push({ 
+                        name: config.cat, 
+                        price: config.price, 
+                        cat: config.cat 
+                    });
+
+                    // Process each duck group in the file
+                    rows.forEach((row, index) => {
+                        const cols = row.split(',').map(s => s.trim());
+                        if (cols.length < 2) return; // Skip empty/broken lines
+
+                        allDucks.push({
+                            id: `${config.cat.toLowerCase()}_${index}`,
+                            p1: cols[0],
+                            p2: cols[1],
+                            p3: cols[2] || null, // Handles "Three Blind Mice" or empty 3rd column
+                            cat: config.cat,
+                            price: config.price
+                        });
+                    });
+                });
+
+                console.log(`Inventory Loaded: ${allDucks.length} Duck Groups across ${categoryConfigs.length} categories.`);
+                renderProducts(); // Refresh the register buttons
+            } catch (error) {
+                console.error("Critical error loading inventory files:", error);
+            }
+        }
         
+        // Attach the listener directly to the ID
+        const undoBtn = document.getElementById('undo-sale-btn');
+
+        if (undoBtn) {
+            undoBtn.addEventListener('click', async () => {
+                console.log("Undo logic firing...");
+                // ... (insert your undo/deleteDoc logic here)
+                
+                // Hide overlay after success
+                document.getElementById('completion-overlay').classList.remove('active');
+            });
+        }
+
         initApp();
     </script>
+
+    <!--Modal for Sale Completion-->
+    <div id="completion-overlay" class="fixed inset-0 z-[9999] hidden flex-col items-center justify-center bg-navy bg-opacity-95">        <div class="relative scale-150 mb-12">
+            <img src="images/Duck.png" id="exploding-duck" class="w-32 h-32 object-contain">
+        </div>
+        
+        <h2 class="text-4xl font-black text-white italic tracking-tighter mb-4">SALE COMPLETE!</h2>
+        <p class="text-gold font-bold animate-pulse mb-8">Ducks are on the move!</p>
+        
+        <button id="undo-sale-btn" class="bg-white text-navy px-8 py-3 rounded-full font-black text-sm hover:bg-gold transition-colors shadow-2xl">
+            ↺ ACCIDENTAL SALE? UNDO
+        </button>
+    </div>
+
 </body>
 </html>
 <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-navy text-white px-6 py-3 rounded-full shadow-2xl transition-all opacity-0 pointer-events-none transform translate-y-4 z-50">

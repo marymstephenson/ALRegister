@@ -112,14 +112,28 @@
         #completion-overlay.active {
             display: flex !important;
             position: fixed !important;
-            inset: 0 !important; /* Forces full-screen coverage */
+            inset: 0 !important;
             width: 100vw !important;
             height: 100vh !important;
             justify-content: center !important;
             align-items: center !important;
+            flex-direction: column !important;
             background-color: rgba(0, 31, 76, 0.98) !important;
-            z-index: 999999 !important; /* Puts it above everything else */
-            pointer-events: auto !important; /* Allows the overlay to be interactive */
+            z-index: 999999 !important;
+            /* This ensures the overlay itself can catch clicks */
+            pointer-events: auto !important; 
+        }
+
+        #correction-bar {
+            position: relative !important;
+            z-index: 1000001 !important;
+            /* Forces the bar to be interactive */
+            pointer-events: auto !important; 
+        }
+
+        #correction-bar button {
+            cursor: pointer !important;
+            pointer-events: auto !important;
         }
 
         #undo-sale-btn {
@@ -135,9 +149,45 @@
             transform: scale(1.1);
         }
 
+        /* Testing Mode Styles */
+        body.testing-mode {
+            border: 8px solid #FFD700; /* Bright Gold Border */
+        }
+
+        body.testing-mode::before {
+            content: "TESTING MODE - DATA NOT SAVED";
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #FFD700;
+            color: #001f4c;
+            padding: 4px 20px;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            border-radius: 0 0 12px 12px;
+            z-index: 1000001;
+            pointer-events: none;
+        }
+
+        /* Diagonal Watermark */
+        body.testing-mode #app-container::after {
+            content: "SANDBOX";
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 15rem;
+            font-weight: 900;
+            color: rgba(0, 31, 76, 0.03); /* Extremely subtle */
+            z-index: -1;
+            pointer-events: none;
+        }
+
     </style>
     <script>
-        tailwind.config = {
+        tailwind.config = {  
             theme: {
                 extend: {
                     colors: {
@@ -157,9 +207,10 @@
 <header class="bg-navy p-4 flex justify-between items-center shadow-lg relative">
     
     <div class="flex-1 flex justify-start">
-        <button id="auth-lock-btn" class="flex items-center justify-center w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full transition-all group">
-            <span id="lock-icon" class="text-lg">🔒</span>
-            <span id="lock-status" class="hidden">Locked</span>
+        <button id="auth-lock-btn" 
+                onclick="openAuthModal()" 
+                class="flex items-center justify-center w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full transition-all group">
+            <span id="lock-icon" class="text-lg">🛠️</span> <span id="lock-status" class="hidden">Testing</span>
         </button>
     </div>
 
@@ -205,36 +256,55 @@
         <div id="error-state" class="text-center text-red-500 text-xl font-bold hidden">There was an error. Check the console for details.</div>
 
         <!-- Register View -->
-        <div id="register-view" class="w-full max-w-4xl flex flex-col hidden animate-fade-in p-4">
-            <div class="bg-sto-blue p-8 rounded-[3rem] shadow-inner mb-6">
-                <div id="product-list" class="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                    </div>
+        <div id="register-view" class="w-full max-w-4xl flex flex-col hidden animate-fade-in p-4 pb-32"> <div class="bg-sto-blue p-8 rounded-[3rem] shadow-inner mb-6">
+                <div id="product-list" class="grid grid-cols-2 sm:grid-cols-4 gap-6"></div>
             </div>
 
             <div class="bg-gold p-6 rounded-[2.5rem] shadow-lg border-b-4 border-yellow-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-    
+                
                 <div class="flex flex-col w-full md:w-auto">
                     <span class="text-navy font-black text-4xl italic mb-4">Total: <span id="current-total">$0.00</span></span>
-        
-                    <div id="cart-list" class="flex flex-col space-y-1 overflow-y-auto max-h-32 pr-4">
-                        </div>
+                    <div id="cart-list" class="flex flex-col space-y-1 overflow-y-auto max-h-32 pr-4 custom-scrollbar"></div>
                 </div>
 
-                <button id="complete-sale-btn" class="bg-navy text-white text-2xl font-black px-12 py-4 rounded-full hover:bg-blue-900 transition-all active:scale-95 shadow-md self-center md:self-start">
-                    Complete Sale
-                </button>
+                <div id="checkout-actions" class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                    <button id="complete-sale-btn" onclick="completeSale()" class="bg-navy text-white text-2xl font-black px-12 py-4 rounded-full hover:bg-blue-900 transition-all active:scale-95 shadow-md self-center md:self-start">
+                        Complete Sale
+                    </button>
+                </div>
+            </div>
 
-                <div class="flex items-center justify-between mb-4 p-3 bg-gray-100 rounded-xl">
-                    <span class="text-navy font-bold text-sm uppercase">Redemption Mode</span>
+            <div class="flex justify-center items-center gap-12 py-6 border-t border-navy/5">
+    
+                <div class="flex flex-col items-center gap-1">
+                    <span class="text-[10px] font-black text-navy opacity-40 uppercase tracking-widest">Payment Tracking</span>
                     <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="redemption-toggle" class="sr-only peer">
-                        <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-navy after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                        <input type="checkbox" id="payment-mode-toggle" class="sr-only peer" onchange="togglePaymentUI()">
+                        <div class="w-10 h-5 bg-gray-300 rounded-full peer peer-checked:bg-navy after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:h-4 after:w-4 after:rounded-full after:transition-all peer-checked:after:translate-x-full"></div>
                     </label>
                 </div>
 
+                <div class="flex flex-col items-center gap-1">
+                    <span class="text-[10px] font-black text-navy opacity-40 uppercase tracking-widest">Redemption</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="redemption-toggle" class="sr-only peer">
+                        <div class="w-10 h-5 bg-gray-300 rounded-full peer peer-checked:bg-gold after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:h-4 after:w-4 after:rounded-full after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                </div>
+
+                <div class="flex flex-col items-center gap-1">
+                    <span class="text-[10px] font-black text-navy opacity-40 uppercase tracking-widest">Environment</span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[9px] font-bold text-navy uppercase" id="mode-label">Testing</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="mode-switch" class="sr-only peer" onchange="toggleMode()">
+                            <div class="w-10 h-5 bg-gray-300 rounded-full peer peer-checked:bg-navy after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:h-4 after:w-4 after:rounded-full after:transition-all peer-checked:after:translate-x-full"></div>
+                        </label>
+                    </div>
+                </div>
+
             </div>
-    
-            <div id="cart-list" class="mt-4 px-6 text-navy text-sm font-bold opacity-70"></div>
+
         </div>
 
         <!-- Sales View -->
@@ -250,6 +320,8 @@
                     <p id="total-revenue" class="text-white text-3xl font-bold">$0.00</p>
                 </div>
             </div>
+
+            <div id="payment-breakdown-bar" class="flex flex-wrap justify-center gap-3"></div>
 
             <div class="bg-blue-100 p-6 md:p-8 rounded-[3rem] shadow-inner flex-grow">
                 <h3 class="text-2xl font-black text-navy mb-6 flex items-center">
@@ -380,7 +452,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, setLogLevel, deleteDoc, getDocs, orderBy} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, setLogLevel, deleteDoc, getDocs, orderBy, updateDoc} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Global Variables (provided by the environment) ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -447,6 +519,10 @@
         let currentCart = [];
         let currentTotal = 0;
 
+        let isAuthenticated = false; // Always starts in Sandbox mode
+        let hasSessionAccess = false; // Has the password been entered this session?
+        let sandboxHistory = []; // Local memory for "fake" sales
+
         // --- Helper Functions ---
         function showMessage(message) {
             modalMessageEl.textContent = message;
@@ -459,47 +535,120 @@
             hamburgerBtn.classList.toggle('open');
         }
 
-        let isAuthenticated = localStorage.getItem('festival_auth') === 'true';
-
-        // 1. Initialize UI state on load
         function updateAuthUI() {
             const statusText = document.getElementById('lock-status');
             const lockIcon = document.getElementById('lock-icon');
+            const modeLabel = document.getElementById('mode-label');
             
-            // Safety guard to prevent the "Cannot set properties of null" error
-            if (!lockIcon) return;
-
+            // 1. DATA SELECTOR: Use a local variable to prevent 'const' conflicts
+            let dataToUse = [];
             if (isAuthenticated) {
-                if (statusText) statusText.textContent = "Unlocked";
-                lockIcon.textContent = "🔓";
+                dataToUse = [...lastFetchedHistory];
+                console.log("UI Sync: Using LIVE data", dataToUse.length);
             } else {
-                if (statusText) statusText.textContent = "Locked";
-                lockIcon.textContent = "🔒";
+                dataToUse = [...sandboxHistory, ...ghostSales];
+                console.log("UI Sync: Using SANDBOX data", dataToUse.length);
+            }
+
+            let topRev = 0; 
+            let totalsByMethod = { "Cash": 0, "Card": 0, "Redemption": 0, "Not Specified": 0 };
+            let topCount = dataToUse.length;
+
+            // 2. CALCULATION
+            dataToUse.forEach(t => {
+                let rev = Number(t.total) || 0;
+                topRev += rev;
+                
+                let method = t.paymentMethod || "Not Specified";
+                if (totalsByMethod.hasOwnProperty(method)) {
+                    totalsByMethod[method] += rev;
+                } else {
+                    totalsByMethod["Not Specified"] += rev;
+                }
+            });
+
+            // 3. FORCE DASHBOARD UPDATE
+            const transEl = document.getElementById('total-transactions');
+            const revEl = document.getElementById('total-revenue');
+            if (transEl) transEl.textContent = topCount;
+            if (revEl) revEl.textContent = `$${topRev.toFixed(2)}`;
+
+            // 4. BREAKDOWN PILLS
+            if (typeof renderBreakdownPills === "function") {
+                renderBreakdownPills(totalsByMethod);
+            }
+
+            // 5. ENVIRONMENT STYLES
+            if (isAuthenticated) {
+                document.body.classList.remove('testing-mode');
+                if (modeLabel) modeLabel.textContent = "Live";
+                if (statusText) statusText.textContent = "Live";
+                if (lockIcon) lockIcon.textContent = "🌐";
+            } else {
+                document.body.classList.add('testing-mode');
+                if (modeLabel) modeLabel.textContent = "Testing";
+                if (statusText) statusText.textContent = "Testing";
+                if (lockIcon) lockIcon.textContent = "🛠️";
+                
+                if (window.applyReportFilters) window.applyReportFilters();
             }
         }
-        updateAuthUI();
 
-        // 2. The "Unlock" Event
-        document.getElementById('auth-lock-btn').onclick = () => {
+        // A. Open the custom modal (no more ugly prompt)
+        window.openAuthModal = () => {
+            // If already live, ask if they want to go back to sandbox
             if (isAuthenticated) {
-                if(confirm("Lock the register? (Guest mode only)")) {
+                if(confirm("Disconnect from Live database and return to Testing Mode?")) {
                     isAuthenticated = false;
-                    localStorage.removeItem('festival_auth');
                     updateAuthUI();
-                    showModal("Register Locked");
+                    showModal("Switched to Testing Mode");
                 }
                 return;
             }
+            document.getElementById('auth-modal').classList.remove('hidden');
+            document.getElementById('auth-input').focus();
+        };
 
-            const code = prompt("Enter Festival Access Key:");
-            if (code === "Thespis1929") {
-                isAuthenticated = true;
-                localStorage.setItem('festival_auth', 'true');
+        // B. Close the modal
+        window.closeAuthModal = () => {
+            document.getElementById('auth-modal').classList.add('hidden');
+            document.getElementById('auth-input').value = '';
+        };
+
+        // C. The logic that actually validates the key
+        window.attemptUnlock = () => {
+            const input = document.getElementById('auth-input').value;
+            if (input === "Thespis1929") {
+                hasSessionAccess = true; // Permanent unlock for this session
+                isAuthenticated = true; // Set to Live initially
+                
+                closeAuthModal();
                 updateAuthUI();
-                showModal("Access Granted: Register Enabled");
+                showModal("System Unlocked: Session Active");
             } else {
-                showModal("Invalid Key");
+                showModal("Invalid Access Key");
             }
+        };
+
+        window.toggleMode = () => {
+            const switchEl = document.getElementById('mode-switch');
+            
+            if (!hasSessionAccess && switchEl.checked) {
+                switchEl.checked = false;
+                openAuthModal();
+                return;
+            }
+
+            // Update the global state immediately
+            isAuthenticated = switchEl.checked;
+            
+            // Refresh UI Components in order
+            updateAuthUI();
+            
+            if (typeof renderItemsAnalysis === "function") renderItemsAnalysis();
+            if (window.applyReportFilters) window.applyReportFilters();
+            
+            showModal(isAuthenticated ? "Connected to LIVE Database" : "Returning to SANDBOX Mode");
         };
 
         window.showView = function(viewElement) {
@@ -634,6 +783,43 @@
             }
         };
 
+        window.completeSale = completeSale;
+
+        window.switchLastSaleMethod = async function(newMethod) {
+            if (!lastSaleId) return;
+
+            if (!isAuthenticated) {
+                // Find the transaction in our local sandbox array
+                let index = sandboxHistory.findIndex(t => t.id === lastSaleId);
+                if (index !== -1) {
+                    sandboxHistory[index].paymentMethod = newMethod;
+                    updateAuthUI(); // Refresh the table and totals
+                    showModal(`Test Record updated to ${newMethod}`);
+                    
+                    const methodText = document.getElementById('celebration-method');
+                    if (methodText) methodText.textContent = `Updated to ${newMethod}`;
+                }
+                return;
+            }
+
+            try {
+                const saleRef = doc(db, "sales", lastSaleId);
+                
+                // Use updateDoc to ONLY change the paymentMethod field
+                await updateDoc(saleRef, {
+                    paymentMethod: newMethod
+                });
+
+                // Visually confirm on the celebration screen
+                const methodText = document.getElementById('celebration-method');
+                if (methodText) methodText.textContent = `Updated to ${newMethod}`;
+                
+                showModal(`Record updated to ${newMethod}`);
+            } catch (e) {
+                console.error("Switch failed:", e);
+            }
+        };
+
         function renderProducts() {
             productListEl.innerHTML = '';
             products.forEach(product => {
@@ -738,65 +924,147 @@
         let lastSaleItems = [];
         let celebrationTimer = null;
 
-        async function completeSale() {
-            if (!isAuthenticated) {
-                showModal("System Locked: Enter Key to Sale");
-                return;
-            }
-            
+        const ghostSales = [
+            { items: [{ name: "Standard Duck", price: 3, cat: "Regular" }], total: 3, paymentMethod: "Cash", date: "2/14 12:00pm", fullDate: new Date() },
+            { items: [{ name: "Valentines Duck", price: 5, cat: "Valentines" }], total: 5, paymentMethod: "Cash", date: "2/14 12:00pm", fullDate: new Date()},
+            { items: [{ name: "Batman Auction Item", price: 50, isAuction: true }], total: 50, paymentMethod: "Card", date: "2/14 12:00pm", fullDate: new Date()},
+            { items: [{ name: "STO Tote Bag", price: 15 }], total: 15, paymentMethod: "Card", date: "2/14 12:00pm", fullDate: new Date()}
+        ];
+
+        let isSaleProcessing = false; // Global Lock
+
+        async function completeSale(methodArg) {
+            // 1. SAFETY LOCK: Prevent double-clicks or rapid firing
+            if (isSaleProcessing) return;
             if (currentCart.length === 0) return;
 
+            // 2. START PROCESSING
+            isSaleProcessing = true;
+            const completeSaleBtn = document.getElementById('complete-sale-btn'); // Ensure ID matches your HTML
+            if (completeSaleBtn) completeSaleBtn.disabled = true;
+
+            const isRedemption = document.getElementById('redemption-toggle')?.checked;
+            const finalMethod = isRedemption ? "Redemption" : (typeof methodArg === 'string' ? methodArg : "Not Specified");
             const itemsToSave = [...currentCart];
-            const totalToSave = currentTotal;
+            const totalToSave = isRedemption ? 0 : currentTotal;
 
             try {
-                // We use a simple string for the date now
-                const docRef = await addDoc(collection(db, "sales"), {
-                    items: itemsToSave,
-                    total: totalToSave,
-                    date: new Date().toLocaleString(),
-                    userId: userId,
-                    accessKey: "Thespis1929"
-                });
+                if (!isAuthenticated) {
+                    // --- WORLD A: TESTING MODE (SANDBOX) ---
+                    const testId = "test-" + Date.now();
+                    const now = new Date();
 
-                lastSaleId = docRef.id;
-                lastSaleItems = [...currentCart];
+                    const sandboxRecord = {
+                        id: testId,
+                        items: itemsToSave,
+                        total: totalToSave,
+                        date: `${now.getMonth()+1}/${now.getDate()} ${now.getHours() % 12 || 12}:${now.getMinutes().toString().padStart(2, '0')}${now.getHours() >= 12 ? 'pm' : 'am'}`,                        paymentMethod: finalMethod,
+                        isTest: true // Metadata tag
+                    };
 
-                console.log("Sale recorded with ID:", lastSaleId);
+                    // Add to the front of our local memory array
+                    sandboxHistory.unshift(sandboxRecord);
 
-                currentCart = [];
-                currentTotal = 0;
-                updateCartDisplay();
+                    updateAuthUI();
+                    
+                    // Sync local globals for Undo/Switch features
+                    lastSaleId = testId;
+                    lastSaleItems = itemsToSave;
 
-                window.showCelebration();
+                    window.showCelebration(finalMethod);
+                    
+                    // Re-render table with local data + ghost data
+                    if (typeof renderTransactionTable === 'function') {
+                        renderTransactionTable([...sandboxHistory, ...ghostSales]);
+                    }
+                    
+                    console.log("Sandbox Sale Complete:", sandboxRecord);
+                    clearCart(); 
+
+                } else {
+                    // --- WORLD B: LIVE MODE (FIRESTORE) ---
+
+                    // RACE CONDITION PROTECTION: Verify ducks aren't sold yet
+                    for (const item of itemsToSave) {
+                        if (item.groupId && item.slot) {
+                            const soldRef = doc(db, "artifacts", appId, "public", "data", "soldDucks", item.groupId);
+                            const freshSnap = await getDoc(soldRef);
+                            if (freshSnap.exists() && freshSnap.data()[`${item.slot}_sold`] === true) {
+                                showModal(`❌ ERROR: ${item.name} was just sold on another iPad!`);
+                                return; // Abort sale
+                            }
+                        }
+                    }
+
+                    // Save to Firestore
+                    const docRef = await addDoc(collection(db, "sales"), {
+                        items: itemsToSave,
+                        total: totalToSave,
+                        date: new Date().toLocaleString(),
+                        paymentMethod: finalMethod,
+                        accessKey: "Thespis1929"
+                    });
+
+                    lastSaleId = docRef.id;
+                    lastSaleItems = itemsToSave;
+
+                    window.showCelebration(finalMethod);
+                    clearCart();
+                }
 
             } catch (err) {
-                console.error("Sale failed:", err);
-                alert("Transaction failed: " + err.message);
+                console.error("Critical Sale Error:", err);
+                showModal("System Error: " + err.message);
+            } finally {
+                // 3. RELEASE LOCK: Always unlock, even if it fails
+                isSaleProcessing = false;
+                if (completeSaleBtn) completeSaleBtn.disabled = false;
+                
+                // Ensure redemption toggle is reset
+                const redemptionToggle = document.getElementById('redemption-toggle');
+                if (redemptionToggle) redemptionToggle.checked = false;
             }
         }
 
-        window.showCelebration = function() {
+        // Helper to clean up the UI after a sale
+        function clearCart() {
+            currentCart = [];
+            currentTotal = 0;
+            if (typeof updateCartDisplay === 'function') updateCartDisplay();
+        }
+
+        window.showCelebration = function(method = "Not Specified") { // Added default value
             const overlay = document.getElementById('completion-overlay');
+            const methodText = document.getElementById('celebration-method');
             const duck = document.getElementById('exploding-duck');
 
             if (!overlay) return;
 
+            // Logic for icons
+            let icon = "⚪";
+            if (method === "Cash") icon = "💵";
+            else if (method === "Card") icon = "💳";
+            else if (method === "Redemption") icon = "🎟️";
+
+            if (methodText) {
+                methodText.textContent = `${icon} Processed as ${method} ${icon}`;
+            }
+
             if (duck) {
                 duck.classList.remove('animate-explode');
-                // We keep this line; it's a necessary 1ms cost for the animation to work
                 void duck.offsetWidth; 
                 duck.classList.add('animate-explode');
             }
 
-            setTimeout(() => {
-                overlay.classList.remove('active');
-                overlay.classList.add('hidden');
-            }, 4000);
-
             overlay.classList.add('active');
             overlay.classList.remove('hidden');
 
+            setTimeout(() => {
+                if (overlay.classList.contains('active')) {
+                    overlay.classList.remove('active');
+                    overlay.classList.add('hidden');
+                }
+            }, 4000); 
         };
 
         function hideCelebration() {
@@ -811,18 +1079,22 @@
         document.getElementById('undo-sale-btn').addEventListener('click', async () => {
             if (!lastSaleId) return;
             
-            // We reuse the deleteTransaction function to keep the code DRY
+            // 1. Delete based on mode (using the function we just updated)
             await window.deleteTransaction(lastSaleId);
             
-            // Restore the cart locally for the STO leader
+            // 2. Restore the cart locally
             currentCart = [...lastSaleItems];
-            currentTotal = currentCart.reduce((sum, item) => sum + (item.price || 0), 0);
+            
+            // 3. Fix: Recalculate total correctly (handling potential redemption $0)
+            currentTotal = currentCart.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
             updateCartDisplay();
             
-            // Close the overlay
+            // 4. Close UI
             const overlay = document.getElementById('completion-overlay');
-            overlay.classList.remove('active');
-            overlay.classList.add('hidden');
+            if (overlay) {
+                overlay.classList.remove('active');
+                overlay.classList.add('hidden');
+            }
             
             lastSaleId = null;
         });
@@ -834,67 +1106,63 @@
             const transactionsRef = query(collection(db, "sales"), orderBy("date", "desc"));
             
             onSnapshot(transactionsRef, (snapshot) => {
-                // 1. Update our "Global Source of Truth" for sorting/filtering
-                lastFetchedHistory = []; 
-
+                const historyMap = new Map();
+                
                 snapshot.forEach(doc => {
                     const data = doc.data();
+                    const method = data.paymentMethod || "Not Specified";
+                    const rev = Number(data.total) || 0;
                     
-                    // Handle Dates (Hybrid support for old string data and new Timestamps)
-                    let displayDate = 'N/A';
+                    // --- Clean Date Handling (Keep your existing logic) ---
                     let dateObject = data.date ? new Date(data.date) : new Date();
-
+                    let displayDate = 'N/A';
                     if (!isNaN(dateObject)) {
                         const month = dateObject.getMonth() + 1;
                         const day = dateObject.getDate();
                         let hours = dateObject.getHours();
                         const minutes = dateObject.getMinutes().toString().padStart(2, '0');
                         const ampm = hours >= 12 ? 'pm' : 'am';
-                        
-                        hours = hours % 12;
-                        hours = hours ? hours : 12; // Handle midnight (0) as 12
-
-                        // Result: "1/26 1:18 pm"
+                        hours = hours % 12 || 12;
                         displayDate = `${month}/${day} ${hours}:${minutes}${ampm}`;
                     }
 
-                    // Handle Items (Hybrid support for strings vs arrays)
-                    let itemsArray = [];
-                    if (Array.isArray(data.items)) {
-                        itemsArray = data.items;
-                    } else if (typeof data.items === 'string') {
-                        try { itemsArray = JSON.parse(data.items); } catch(e) { itemsArray = []; }
-                    }
-
-                    lastFetchedHistory.push({
+                    historyMap.set(doc.id, {
                         id: doc.id,
+                        paymentMethod: method,
+                        total: rev,
                         date: displayDate, 
                         fullDate: dateObject, 
-                        total: Number(data.total) || 0,
-                        items: itemsArray
+                        items: Array.isArray(data.items) ? data.items : []
                     });
                 });
 
-                // 2. DASHBOARD TOTALS (Based on the total raw history)
-                const totalCount = lastFetchedHistory.length;
-                const totalRev = lastFetchedHistory.reduce((sum, t) => sum + t.total, 0);
+                // 1. Update the background data
+                lastFetchedHistory = Array.from(historyMap.values());
 
-                const transEl = document.getElementById('total-transactions');
-                const revEl = document.getElementById('total-revenue');
-                
-                if (transEl) transEl.textContent = totalCount;
-                if (revEl) revEl.textContent = `$${totalRev.toFixed(2)}`;
-
-                // 3. RENDER (Using our filter/sort logic)
-                // This ensures the table respect any active "Time" or "Total" sorts immediately
-                if (window.applyReportFilters) {
-                    window.applyReportFilters();
+                // 2. THE MUZZLE: Only update the screen if we are actually in LIVE mode
+                if (isAuthenticated) {
+                    updateAuthUI(); 
                 } else {
-                    // Fallback just in case script loading is weird
-                    renderTransactionTable(lastFetchedHistory);
+                    console.log("Firebase updated in background, but Sandbox is active. Keeping screen clean.");
                 }
                 
-            }, (error) => console.error("Error history listener:", error));
+            }, (error) => console.error("Firestore Listener Error:", error));
+        }
+
+        function renderBreakdownPills(totals) {
+            const bar = document.getElementById('payment-breakdown-bar');
+            if (!bar) return;
+            bar.innerHTML = '';
+
+            Object.keys(totals).forEach(method => {
+                const amount = totals[method];
+                if (amount > 0 || (method === "Redemption" && amount === 0)) {
+                    const pill = document.createElement('div');
+                    pill.className = "bg-navy/5 border border-navy/10 px-4 py-1 rounded-full text-[10px] font-bold text-navy flex gap-2";
+                    pill.innerHTML = `<span class="opacity-50 uppercase">${method}:</span> <span>$${amount.toFixed(2)}</span>`;
+                    bar.appendChild(pill);
+                }
+            });
         }
 
         const formatTimestamp = (ts) => {
@@ -913,23 +1181,28 @@
         };
 
         function renderTransactionTable(history) {
+            if (!transactionsTableBody) return; // Guard against null elements
             transactionsTableBody.innerHTML = '';
+            
+            if (!history || history.length === 0) {
+                transactionsTableBody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-navy opacity-50 italic">No transactions found matching your search.</td></tr>';
+                return;
+            }
+
             history.forEach(transaction => {
                 const tr = document.createElement('tr');
-                tr.className = 'border-b border-white border-opacity-20 last:border-b-0';
+                tr.className = 'border-b border-white border-opacity-20 last:border-b-0 animate-fade-in';
                 
                 // 1. Date Column
                 const dateTd = document.createElement('td');
                 dateTd.className = 'py-2 px-4 text-navy text-sm';
                 dateTd.textContent = transaction.date || "Unknown Date";
                 
-                // 2. Items Column (The Fix is here!)
+                // 2. Items Column
                 const itemsTd = document.createElement('td');
-                itemsTd.className = 'py-2 px-4';
+                itemsTd.className = 'py-2 px-4 text-sm text-navy';
 
-                // Safety check: Ensure items is an array before calling reduce
                 const itemsArray = Array.isArray(transaction.items) ? transaction.items : [];
-
                 const itemCounts = itemsArray.reduce((acc, item) => {
                     const itemName = typeof item === 'object' ? item.name : item;
                     acc[itemName] = (acc[itemName] || 0) + 1;
@@ -940,12 +1213,25 @@
                     .map(item => `${item} x${itemCounts[item]}`)
                     .join(', ');
 
-                // 3. Total Column
+                // 3. Total Column (with safe icons)
                 const totalTd = document.createElement('td');
-                totalTd.className = 'py-2 px-4 font-bold';
-                totalTd.textContent = `$${transaction.total.toFixed(2)}`;
+                totalTd.className = 'py-2 px-4 font-bold text-navy';
+                
+                const method = transaction.paymentMethod || "Not Specified";
+                let icon = "❓"; 
 
-                // 4. NEW: Delete Button Column (For your Feb 13th Goal)
+                if (method === "Cash") icon = "💵";
+                else if (method === "Card") icon = "💳";
+                else if (method === "Redemption") icon = "🎟️";
+
+                totalTd.innerHTML = `
+                    <div class="flex items-center justify-end gap-3">
+                        <span>$${(Number(transaction.total) || 0).toFixed(2)}</span>
+                        <span class="text-lg" title="${method}">${icon}</span>
+                    </div>
+                `;
+
+                // 4. Delete Column
                 const actionTd = document.createElement('td');
                 actionTd.className = 'py-2 px-4 text-right';
 
@@ -953,22 +1239,19 @@
                 deleteBtn.innerHTML = '🗑️';
                 deleteBtn.className = 'p-2 transition-all cursor-pointer opacity-70 hover:opacity-100 hover:scale-110';
 
-                // Double-click logic
                 let clickCount = 0;
-                deleteBtn.onclick = () => {
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation(); // Prevent row click events
                     clickCount++;
                     if (clickCount === 1) {
                         deleteBtn.innerHTML = '⚠️ Confirm?';
                         deleteBtn.classList.add('text-red-500', 'font-bold', 'scale-110');
-                        
-                        // Reset after 3 seconds if they don't click again
                         setTimeout(() => {
                             clickCount = 0;
                             deleteBtn.innerHTML = '🗑️';
                             deleteBtn.classList.remove('text-red-500', 'font-bold', 'scale-110');
                         }, 3000);
                     } else {
-                        // Second click: Execute the delete
                         window.deleteTransaction(transaction.id);
                     }
                 };
@@ -978,7 +1261,7 @@
                 tr.appendChild(dateTd);
                 tr.appendChild(itemsTd);
                 tr.appendChild(totalTd);
-                tr.appendChild(actionTd); // Add the new action column
+                tr.appendChild(actionTd);
                 transactionsTableBody.appendChild(tr);
             });
         }
@@ -986,8 +1269,18 @@
         //Delete Transaction function
         window.deleteTransaction = async function(docId) {
             if (!isAuthenticated) {
-                showModal("Locked: Enter Key to Delete");
-                return;
+                // Find if it's a sandbox sale (we don't delete ghost data, usually)
+                const initialLength = sandboxHistory.length;
+                sandboxHistory = sandboxHistory.filter(t => t.id !== docId);
+                
+                if (sandboxHistory.length < initialLength) {
+                    updateAuthUI(); // Refresh the totals and table
+                    showModal("Test Sale removed!");
+                } else {
+                    // If it wasn't a sandbox sale, it might be a ghost sale
+                    showModal("Demo items cannot be deleted.");
+                }
+                return; // Stop here!
             }
             
             try {
@@ -1049,25 +1342,36 @@
         };
 
         window.applyReportFilters = function() {
-            let filtered = [...lastFetchedHistory];
+            // 1. DATA SELECTOR: Strictly exclusive based on mode
+            let sourceData = isAuthenticated ? [...lastFetchedHistory] : [...sandboxHistory, ...ghostSales];
+            let filtered = [...sourceData];
 
-            const filterDate = document.getElementById('filter-date').value;
-            const startTime = document.getElementById('start-time').value;
-            const endTime = document.getElementById('end-time').value;
+            // 2. THE GUARD: Find the filter elements
+            const dateEl = document.getElementById('filter-date');
+            const startEl = document.getElementById('start-time');
+            const endEl = document.getElementById('end-time');
 
-            // 1. Time & Date Filtering
+            // IF these don't exist (you aren't on the Sales screen), skip filtering but STILL update UI
+            if (!dateEl || !startEl || !endEl) {
+                updateSearchDashboard(filtered); 
+                renderTransactionTable(filtered.slice(0, 10));
+                return; 
+            }
+
+            // 3. ACTUAL FILTERING (Only runs if elements exist)
+            const filterDate = dateEl.value;
+            const startTime = startEl.value;
+            const endTime = endEl.value;
+
             if (filterDate || startTime || endTime) {
-                const todayStr = new Date().toLocaleDateString('en-CA'); // Gets YYYY-MM-DD reliably
-                const targetDate = filterDate || todayStr;
-
+                const targetDate = filterDate || new Date().toLocaleDateString('en-CA');
                 filtered = filtered.filter(trans => {
+                    if (!trans.fullDate) return false;
                     const transDateStr = trans.fullDate.toLocaleDateString('en-CA');
-                    const isTargetDay = transDateStr === targetDate;
-
-                    if (!isTargetDay) return false;
+                    if (transDateStr !== targetDate) return false;
 
                     if (startTime || endTime) {
-                        const transTimeStr = trans.fullDate.toTimeString().slice(0, 5); // "HH:MM"
+                        const transTimeStr = trans.fullDate.toTimeString().slice(0, 5);
                         if (startTime && transTimeStr < startTime) return false;
                         if (endTime && transTimeStr > endTime) return false;
                     }
@@ -1075,28 +1379,28 @@
                 });
             }
 
-            // 2. Sorting
+            // 4. SORT & RENDER
             filtered.sort((a, b) => {
                 let valA = currentSortColumn === 'date' ? a.fullDate : a.total;
                 let valB = currentSortColumn === 'date' ? b.fullDate : b.total;
                 return currentSortOrder === 'desc' ? valB - valA : valA - valB;
             });
 
-            // 3. NEW: Calculate the total for THIS specific search
-            const searchTotal = filtered.reduce((sum, t) => sum + t.total, 0);
-            const searchCount = filtered.length; // The total number of matches
-
-            // Update the UI
-            const searchTotalEl = document.getElementById('search-total-revenue');
-            const searchCountEl = document.getElementById('search-total-count');
-            
-            if (searchTotalEl) searchTotalEl.textContent = `$${searchTotal.toFixed(2)}`;
-            if (searchCountEl) searchCountEl.textContent = searchCount;
-
-            // 4. THE LIMIT: Only show the top 10 results in the UI
-            const limitedView = filtered.slice(0, 10);
-            renderTransactionTable(limitedView);
+            updateSearchDashboard(filtered);
+            renderTransactionTable(filtered.slice(0, 10));
         };
+
+        // HELPER: Keep the search count/total in sync without crashing
+        function updateSearchDashboard(data) {
+            const sTotal = data.reduce((sum, t) => sum + (Number(t.total) || 0), 0);
+            const sCount = data.length;
+            
+            const sTotalEl = document.getElementById('search-total-revenue');
+            const sCountEl = document.getElementById('search-total-count');
+            
+            if (sTotalEl) sTotalEl.textContent = `$${sTotal.toFixed(2)}`;
+            if (sCountEl) sCountEl.textContent = sCount;
+        }
 
         //Silent Auction Functions
         window.openAuctionModal = function() {
@@ -1135,6 +1439,8 @@
         window.renderItemsAnalysis = function() {
             if (!itemsAnalysisBody) return;
 
+            const activeHistory = isAuthenticated ? lastFetchedHistory : [...sandboxHistory, ...ghostSales];
+
             // 1. Data Buckets
             const duckGroups = {
                 "Regular": { name: "Regular Ducks", qty: 0, rev: 0 },
@@ -1150,12 +1456,17 @@
             const independentItems = {}; // For Totes, Stickers, etc.
 
             // 2. Process History
-            lastFetchedHistory.forEach(trans => {
+            activeHistory.forEach(trans => {
                 if (!trans.items) return;
                 trans.items.forEach(item => {
                     const name = item.name || "Unknown Item";
                     const price = Number(item.price) || 0;
                     const cat = item.cat || "";
+                    const lowerName = name.toLowerCase();
+                    const isDuck = cat.includes("Duck") || lowerName.includes("duck") || 
+                        lowerName.startsWith("regular:") || lowerName.startsWith("valentines:") || 
+                        lowerName.startsWith("glitter:") || lowerName.startsWith("light-up:");
+
 
                     // A. IS IT AN AUCTION ITEM?
                     if (name.toLowerCase().includes("auction") || item.isAuction) {
@@ -1166,15 +1477,23 @@
                         totalAuctionRev += price;
                     } 
                     // B. IS IT A DUCK?
-                    else if (cat === "Regular" || cat === "Valentines" || cat === "Glitter" || cat === "Light-Up" || name.toLowerCase().includes("duck")) {
+                    else if (isDuck) {
+                        
                         totalDuckQty++;
                         totalDuckRev += price;
-                        // Match to the right sub-bucket
-                        if (cat === "Valentines" || name.includes("Valentines")) duckGroups["Valentines"].qty++, duckGroups["Valentines"].rev += price;
-                        else if (cat === "Glitter" || name.includes("Glitter")) duckGroups["Glitter"].qty++, duckGroups["Glitter"].rev += price;
-                        else if (cat === "Light-Up" || name.includes("Light-Up") || name.includes("Glow")) duckGroups["Light-Up"].qty++, duckGroups["Light-Up"].rev += price;
-                        else duckGroups["Regular"].qty++, duckGroups["Regular"].rev += price;
-                    } 
+
+                        // Use a more aggressive match for the sub-buckets
+                        const lowerName = name.toLowerCase();
+                        if (lowerName.includes("valentine")) {
+                            duckGroups["Valentines"].qty++; duckGroups["Valentines"].rev += price;
+                        } else if (lowerName.includes("glitter")) {
+                            duckGroups["Glitter"].qty++; duckGroups["Glitter"].rev += price;
+                        } else if (lowerName.includes("light") || lowerName.includes("glow")) {
+                            duckGroups["Light-Up"].qty++; duckGroups["Light-Up"].rev += price;
+                        } else {
+                            duckGroups["Regular"].qty++; duckGroups["Regular"].rev += price;
+                        }
+                    }
                     // C. EVERYTHING ELSE (Totes, Stickers, etc.)
                     else {
                         if (!independentItems[name]) independentItems[name] = { qty: 0, rev: 0 };
@@ -1258,6 +1577,22 @@
             itemsAnalysisBody.appendChild(details);
         }
 
+        window.togglePaymentUI = function() {
+            const isTrackingOn = document.getElementById('payment-mode-toggle').checked;
+            const actionContainer = document.getElementById('checkout-actions');
+            
+            if (isTrackingOn) {
+                actionContainer.innerHTML = `
+                    <button onclick="completeSale('Card')" class="flex-1 bg-navy text-white text-lg font-black px-8 py-4 rounded-2xl hover:bg-blue-900 transition-all active:scale-95 shadow-md">CARD</button>
+                    <button onclick="completeSale('Cash')" class="flex-1 bg-blue-900 text-white text-lg font-black px-8 py-4 rounded-2xl hover:bg-blue-800 transition-all active:scale-95 shadow-md">CASH</button>
+                `;
+            } else {
+                actionContainer.innerHTML = `
+                    <button onclick="completeSale()" class="bg-navy text-white text-2xl font-black px-12 py-4 rounded-full hover:bg-blue-900 transition-all active:scale-95 shadow-md">Complete Sale</button>
+                `;
+            }
+        };
+
         function showModal(message) {
             const toast = document.getElementById('toast');
             const toastMsg = document.getElementById('toast-message');
@@ -1293,7 +1628,6 @@
             e.preventDefault();
             showView(itemsView);
         });
-        completeSaleBtn.addEventListener('click', completeSale);
         
         // --- Main App Initialization ---
         async function initApp() {
@@ -1370,6 +1704,8 @@
             { file: 'Duck Duos 2025 - Light-Up Ducks.csv', cat: 'Light-Up', price: 5.00 }
         ];
 
+
+
         async function loadInventoryFromFile() {
             try {
                 // Reset our global data buckets
@@ -1424,7 +1760,6 @@
         if (undoBtn) {
             undoBtn.addEventListener('click', async () => {
                 console.log("Undo logic firing...");
-                // ... (insert your undo/deleteDoc logic here)
                 
                 // Hide overlay after success
                 document.getElementById('completion-overlay').classList.remove('active');
@@ -1435,16 +1770,44 @@
     </script>
 
     <!--Modal for Sale Completion-->
-    <div id="completion-overlay" class="fixed inset-0 z-[9999] hidden flex-col items-center justify-center bg-navy bg-opacity-95">        <div class="relative scale-150 mb-12">
+    <div id="completion-overlay" class="fixed inset-0 z-[9999] hidden flex-col items-center justify-center bg-navy bg-opacity-95">
+        <div class="relative scale-150 mb-12">
             <img src="images/Duck.png" id="exploding-duck" class="w-32 h-32 object-contain">
         </div>
         
-        <h2 class="text-4xl font-black text-white italic tracking-tighter mb-4">SALE COMPLETE!</h2>
-        <p class="text-gold font-bold animate-pulse mb-8">Ducks are on the move!</p>
+        <h2 id="celebration-title" class="text-4xl font-black text-white italic tracking-tighter mb-2 uppercase">Sale Complete!</h2>
+        <p id="celebration-method" class="text-gold font-bold animate-pulse mb-8 uppercase text-sm"></p>
+        
+        <div id="correction-bar" class="flex flex-col items-center gap-2 mb-10">
+            <span class="text-[10px] text-white opacity-40 uppercase font-bold tracking-widest">Wrong Payment Type?</span>
+            <div class="flex gap-2 bg-white/5 p-1 rounded-full border border-white/10">
+                <button onclick="switchLastSaleMethod('Cash')" class="px-4 py-1 rounded-full text-[10px] font-black text-white hover:bg-green-700 transition-colors">💵 SWITCH TO CASH</button>
+                <button onclick="switchLastSaleMethod('Card')" class="px-4 py-1 rounded-full text-[10px] font-black text-white hover:bg-blue-700 transition-colors">💳 SWITCH TO CARD</button>
+            </div>
+        </div>
         
         <button id="undo-sale-btn" class="bg-white text-navy px-8 py-3 rounded-full font-black text-sm hover:bg-gold transition-colors shadow-2xl">
             ↺ ACCIDENTAL SALE? UNDO
         </button>
+    </div>
+
+    <!--Modal for Testing Mode-->
+    <div id="auth-modal" class="fixed inset-0 z-[1000000] hidden flex items-center justify-center bg-navy/90 backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-[3.5rem] shadow-2xl w-full max-w-md border-4 border-gold text-center animate-fade-in">
+            <div class="bg-navy w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-gold">
+                <span class="text-4xl">🔐</span>
+            </div>
+            <h2 class="text-2xl font-black text-navy italic uppercase mb-2">Live Access Required</h2>
+            <p class="text-gray-500 text-sm mb-6 font-medium">Enter the Festival Access Key to connect to the live store database.</p>
+            
+            <input type="password" id="auth-input" placeholder="••••••••" 
+                class="w-full p-4 rounded-2xl border-2 border-gray-200 focus:border-navy outline-none text-center text-2xl tracking-widest mb-4">
+            
+            <div class="flex gap-3">
+                <button onclick="closeAuthModal()" class="flex-1 py-4 font-bold text-navy hover:text-red-500 transition-colors">Cancel</button>
+                <button onclick="attemptUnlock()" class="flex-1 bg-navy text-white py-4 rounded-2xl font-black hover:bg-blue-900 transition-all active:scale-95">Unlock Live</button>
+            </div>
+        </div>
     </div>
 
 </body>

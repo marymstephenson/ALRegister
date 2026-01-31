@@ -385,6 +385,11 @@
                 </div>
 
             </div>
+
+            <button onclick="exportToCSV()" class="bg-navy text-white px-4 py-1 rounded-full font-bold text-sm border border-white border-opacity-20 hover:bg-opacity-80 transition-all flex items-center gap-2">
+                <span>📊</span> Export to Sheets
+            </button>
+
         </div>
 
         <!--Items View-->
@@ -394,6 +399,11 @@
             </div>
             
             <div id="items-analysis-body" class="space-y-3"></div>
+
+            <button onclick="exportInventoryToCSV()" class="bg-navy text-white px-4 py-1 rounded-full font-bold text-sm border border-white border-opacity-20 hover:bg-opacity-80 transition-all flex items-center gap-2">
+                <span>📦</span> Export Inventory
+            </button>
+
         </div>
 
     <!-- Modal for messages -->
@@ -472,6 +482,9 @@
         let app, db, auth;
         let userId = 'unknown';
         let duckPrices = { "Regular": 2.00, "Valentines": 3.00, "Glitter": 3.00, "Light-Up": 5.00 }; // Your starting defaults        
+        let currentSortColumn = 'date'; // Default to newest
+        let isAscending = false;        // Default to newest at the top
+        
         // --- DOM Elements ---
         const productListEl = document.getElementById('product-list');
         const cartListEl = document.getElementById('cart-list');
@@ -516,8 +529,11 @@
             { name: "Hadestown Coloring Pages", price: 5.00 },
             { name: "Postcards", price: 2.00 }
         ];
+        
+        let lastFetchedHistory = [];
         let currentCart = [];
         let currentTotal = 0;
+        let currentSortOrder = 'desc'
 
         let isAuthenticated = false; // Always starts in Sandbox mode
         let hasSessionAccess = false; // Has the password been entered this session?
@@ -536,62 +552,44 @@
         }
 
         function updateAuthUI() {
-            const statusText = document.getElementById('lock-status');
-            const lockIcon = document.getElementById('lock-icon');
-            const modeLabel = document.getElementById('mode-label');
-            
-            // 1. DATA SELECTOR: Use a local variable to prevent 'const' conflicts
-            let dataToUse = [];
-            if (isAuthenticated) {
-                dataToUse = [...lastFetchedHistory];
-                console.log("UI Sync: Using LIVE data", dataToUse.length);
-            } else {
-                dataToUse = [...sandboxHistory, ...ghostSales];
-                console.log("UI Sync: Using SANDBOX data", dataToUse.length);
-            }
+            // 1. SELECT THE SOURCE DATA
+            // We combine the new sandbox sales with the ghost data so the table is never empty
+            let activeData = isAuthenticated ? [...lastFetchedHistory].reverse() : [...sandboxHistory, ...ghostSales];
 
+            // 2. CALCULATE TOP BUBBLES (Using the unified 'activeData')
             let topRev = 0; 
             let totalsByMethod = { "Cash": 0, "Card": 0, "Redemption": 0, "Not Specified": 0 };
-            let topCount = dataToUse.length;
 
-            // 2. CALCULATION
-            dataToUse.forEach(t => {
+            activeData.forEach(t => {
                 let rev = Number(t.total) || 0;
                 topRev += rev;
-                
-                let method = t.paymentMethod || "Not Specified";
-                if (totalsByMethod.hasOwnProperty(method)) {
-                    totalsByMethod[method] += rev;
-                } else {
-                    totalsByMethod["Not Specified"] += rev;
-                }
+                let method = (t.paymentMethod || "Not Specified").trim();
+                // Normalize for the pills
+                let pMethod = method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
+                if (totalsByMethod.hasOwnProperty(pMethod)) totalsByMethod[pMethod] += rev;
+                else totalsByMethod["Not Specified"] += rev;
             });
 
-            // 3. FORCE DASHBOARD UPDATE
-            const transEl = document.getElementById('total-transactions');
-            const revEl = document.getElementById('total-revenue');
-            if (transEl) transEl.textContent = topCount;
-            if (revEl) revEl.textContent = `$${topRev.toFixed(2)}`;
+            // 3. UPDATE THE DASHBOARD BUBBLES
+            document.getElementById('total-transactions').textContent = activeData.length;
+            document.getElementById('total-revenue').textContent = `$${topRev.toFixed(2)}`;
 
-            // 4. BREAKDOWN PILLS
-            if (typeof renderBreakdownPills === "function") {
-                renderBreakdownPills(totalsByMethod);
-            }
-
-            // 5. ENVIRONMENT STYLES
+            // 4. UPDATE ENVIRONMENT STYLES (Testing vs Live)
             if (isAuthenticated) {
                 document.body.classList.remove('testing-mode');
-                if (modeLabel) modeLabel.textContent = "Live";
-                if (statusText) statusText.textContent = "Live";
-                if (lockIcon) lockIcon.textContent = "🌐";
+                document.getElementById('mode-label').textContent = "Live";
+                document.getElementById('lock-icon').textContent = "🌐";
             } else {
                 document.body.classList.add('testing-mode');
-                if (modeLabel) modeLabel.textContent = "Testing";
-                if (statusText) statusText.textContent = "Testing";
-                if (lockIcon) lockIcon.textContent = "🛠️";
-                
-                if (window.applyReportFilters) window.applyReportFilters();
+                document.getElementById('mode-label').textContent = "Testing";
+                document.getElementById('lock-icon').textContent = "🛠️";
             }
+
+            // 5. THE CRITICAL FIX: Explicitly pass 'activeData' to the table
+            // If you don't pass activeData here, the table stays stuck on the ghosts
+            window.applyReportFilters(activeData); 
+
+            console.log(`UI Rendered: ${isAuthenticated ? 'LIVE' : 'SANDBOX'} mode with ${activeData.length} total items.`);
         }
 
         // A. Open the custom modal (no more ugly prompt)
@@ -679,7 +677,7 @@
         let latestSearchId = 0; // Global tracker to prevent race conditions
 
         window.searchDucks = async function() {
-            const searchId = ++latestSearchId; // Assign a unique ID to this specific search attempt
+            const searchId = ++latestSearchId; 
             const query = document.getElementById('duck-search-input').value.toLowerCase().trim();
             const resultsContainer = document.getElementById('duck-results');
             
@@ -700,14 +698,20 @@
             }
 
             for (const group of matches) {
-                // THE GUARD: If a newer search has started, stop this old one immediately
                 if (searchId !== latestSearchId) return; 
 
+                // 1. Fetch real-time data from Firebase
                 const soldRef = doc(db, "artifacts", appId, "public", "data", "soldDucks", group.id);
                 const soldSnap = await getDoc(soldRef);
-                const soldData = soldSnap.exists() ? soldSnap.data() : { p1_sold: false, p2_sold: false, p3_sold: false };
+                
+                // Default to everything being available
+                let soldData = soldSnap.exists() ? soldSnap.data() : { p1_sold: false, p2_sold: false, p3_sold: false };
 
-                // Ensure we haven't been superseded while waiting for Firebase
+                // 2. 🔥 THE HYBRID FIX: Merge Sandbox session sales into the view
+                if (!isAuthenticated && window.sandboxSoldDucks && window.sandboxSoldDucks[group.id]) {
+                    soldData = { ...soldData, ...window.sandboxSoldDucks[group.id] };
+                }
+
                 if (searchId !== latestSearchId) return;
 
                 const card = document.createElement('div');
@@ -721,12 +725,11 @@
                     </div>
                     <div class="space-y-3">`;
                 
-                // Handle duos and trios dynamically
                 const partners = [
                     { key: 'p1', name: group.p1 },
                     { key: 'p2', name: group.p2 },
                     { key: 'p3', name: group.p3 }
-                ].filter(p => p.name); // Only show slots that actually have a duck name
+                ].filter(p => p.name);
 
                 partners.forEach(p => {
                     const isSold = soldData[`${p.key}_sold`];
@@ -934,13 +937,10 @@
         let isSaleProcessing = false; // Global Lock
 
         async function completeSale(methodArg) {
-            // 1. SAFETY LOCK: Prevent double-clicks or rapid firing
-            if (isSaleProcessing) return;
-            if (currentCart.length === 0) return;
+            if (isSaleProcessing || currentCart.length === 0) return;
 
-            // 2. START PROCESSING
             isSaleProcessing = true;
-            const completeSaleBtn = document.getElementById('complete-sale-btn'); // Ensure ID matches your HTML
+            const completeSaleBtn = document.getElementById('complete-sale-btn');
             if (completeSaleBtn) completeSaleBtn.disabled = true;
 
             const isRedemption = document.getElementById('redemption-toggle')?.checked;
@@ -958,56 +958,59 @@
                         id: testId,
                         items: itemsToSave,
                         total: totalToSave,
-                        date: `${now.getMonth()+1}/${now.getDate()} ${now.getHours() % 12 || 12}:${now.getMinutes().toString().padStart(2, '0')}${now.getHours() >= 12 ? 'pm' : 'am'}`,                        paymentMethod: finalMethod,
-                        isTest: true // Metadata tag
+                        timestamp: Date.now(), 
+                        date: `${now.getMonth()+1}/${now.getDate()} ${now.getHours() % 12 || 12}:${now.getMinutes().toString().padStart(2, '0')}${now.getHours() >= 12 ? 'pm' : 'am'}`,
+                        paymentMethod: finalMethod,
+                        isTest: true 
                     };
 
-                    // Add to the front of our local memory array
-                    sandboxHistory.unshift(sandboxRecord);
+                    // 🔥 SANDBOX DUCK SYNC: Keep track of sold ducks locally for testing
+                    itemsToSave.forEach(item => {
+                        if (item.groupId && item.slot) {
+                            // We store this in a temporary global object for the session
+                            if (!window.sandboxSoldDucks) window.sandboxSoldDucks = {};
+                            if (!window.sandboxSoldDucks[item.groupId]) window.sandboxSoldDucks[item.groupId] = {};
+                            window.sandboxSoldDucks[item.groupId][`${item.slot}_sold`] = true;
+                        }
+                    });
 
-                    updateAuthUI();
+                    sandboxHistory.unshift(sandboxRecord);
+                    updateAuthUI(); 
                     
-                    // Sync local globals for Undo/Switch features
                     lastSaleId = testId;
                     lastSaleItems = itemsToSave;
 
                     window.showCelebration(finalMethod);
-                    
-                    // Re-render table with local data + ghost data
-                    if (typeof renderTransactionTable === 'function') {
-                        renderTransactionTable([...sandboxHistory, ...ghostSales]);
-                    }
-                    
-                    console.log("Sandbox Sale Complete:", sandboxRecord);
                     clearCart(); 
+                    
+                    isSaleProcessing = false;
+                    if (completeSaleBtn) completeSaleBtn.disabled = false;
+                    return; 
 
                 } else {
                     // --- WORLD B: LIVE MODE (FIRESTORE) ---
-
-                    // RACE CONDITION PROTECTION: Verify ducks aren't sold yet
-                    for (const item of itemsToSave) {
-                        if (item.groupId && item.slot) {
-                            const soldRef = doc(db, "artifacts", appId, "public", "data", "soldDucks", item.groupId);
-                            const freshSnap = await getDoc(soldRef);
-                            if (freshSnap.exists() && freshSnap.data()[`${item.slot}_sold`] === true) {
-                                showModal(`❌ ERROR: ${item.name} was just sold on another iPad!`);
-                                return; // Abort sale
-                            }
-                        }
-                    }
-
-                    // Save to Firestore
+                    // 1. Save the Sale Record
                     const docRef = await addDoc(collection(db, "sales"), {
                         items: itemsToSave,
                         total: totalToSave,
-                        date: new Date().toLocaleString(),
+                        date: new Date().toLocaleDateString([], {month:'numeric', day:'numeric'}) + ' ' + new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit', hour12:true}).toLowerCase(),
                         paymentMethod: finalMethod,
-                        accessKey: "Thespis1929"
+                        environment: "Live"
                     });
+
+                    // 2. 🔥 LIVE DUCK SYNC: Mark the specific duck slots as sold in Firebase
+                    for (const item of itemsToSave) {
+                        if (item.groupId && item.slot) {
+                            const duckRef = doc(db, "artifacts", appId, "public", "data", "soldDucks", item.groupId);
+                            // use merge: true so we don't accidentally overwrite Sally with Joe
+                            await setDoc(duckRef, {
+                                [`${item.slot}_sold`]: true
+                            }, { merge: true });
+                        }
+                    }
 
                     lastSaleId = docRef.id;
                     lastSaleItems = itemsToSave;
-
                     window.showCelebration(finalMethod);
                     clearCart();
                 }
@@ -1016,13 +1019,8 @@
                 console.error("Critical Sale Error:", err);
                 showModal("System Error: " + err.message);
             } finally {
-                // 3. RELEASE LOCK: Always unlock, even if it fails
                 isSaleProcessing = false;
                 if (completeSaleBtn) completeSaleBtn.disabled = false;
-                
-                // Ensure redemption toggle is reset
-                const redemptionToggle = document.getElementById('redemption-toggle');
-                if (redemptionToggle) redemptionToggle.checked = false;
             }
         }
 
@@ -1105,41 +1103,27 @@
 
             const transactionsRef = query(collection(db, "sales"), orderBy("date", "desc"));
             
+            // We only attach this listener ONCE. 
             onSnapshot(transactionsRef, (snapshot) => {
                 const historyMap = new Map();
                 
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    const method = data.paymentMethod || "Not Specified";
-                    const rev = Number(data.total) || 0;
-                    
-                    // --- Clean Date Handling (Keep your existing logic) ---
-                    let dateObject = data.date ? new Date(data.date) : new Date();
-                    let displayDate = 'N/A';
-                    if (!isNaN(dateObject)) {
-                        const month = dateObject.getMonth() + 1;
-                        const day = dateObject.getDate();
-                        let hours = dateObject.getHours();
-                        const minutes = dateObject.getMinutes().toString().padStart(2, '0');
-                        const ampm = hours >= 12 ? 'pm' : 'am';
-                        hours = hours % 12 || 12;
-                        displayDate = `${month}/${day} ${hours}:${minutes}${ampm}`;
-                    }
-
                     historyMap.set(doc.id, {
                         id: doc.id,
-                        paymentMethod: method,
-                        total: rev,
-                        date: displayDate, 
-                        fullDate: dateObject, 
+                        paymentMethod: data.paymentMethod || "Not Specified",
+                        total: Number(data.total) || 0,
+                        date: data.date || "N/A", 
+                        fullDate: data.date ? new Date(data.date) : new Date(), 
                         items: Array.isArray(data.items) ? data.items : []
                     });
                 });
 
-                // 1. Update the background data
+                // 1. Update the background data array
                 lastFetchedHistory = Array.from(historyMap.values());
 
-                // 2. THE MUZZLE: Only update the screen if we are actually in LIVE mode
+                // 2. ONLY update the screen if we are actually in LIVE mode
+                // This stops the Live data from "leaking" into your Sandbox view
                 if (isAuthenticated) {
                     updateAuthUI(); 
                 } else {
@@ -1181,138 +1165,167 @@
         };
 
         function renderTransactionTable(history) {
-            if (!transactionsTableBody) return; // Guard against null elements
+            if (!transactionsTableBody) return; 
             transactionsTableBody.innerHTML = '';
-            
+            let tally = { "Cash": 0, "Card": 0, "Redemption": 0, "Other": 0 };
+
+
             if (!history || history.length === 0) {
-                transactionsTableBody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-navy opacity-50 italic">No transactions found matching your search.</td></tr>';
+                transactionsTableBody.innerHTML = '<tr><td colspan="4" class="py-8 text-center italic opacity-50">No transactions found.</td></tr>';
+                renderBreakdownPills(tally);
                 return;
             }
 
             history.forEach(transaction => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-white border-opacity-20 last:border-b-0 animate-fade-in';
-                
-                // 1. Date Column
-                const dateTd = document.createElement('td');
-                dateTd.className = 'py-2 px-4 text-navy text-sm';
-                dateTd.textContent = transaction.date || "Unknown Date";
-                
-                // 2. Items Column
-                const itemsTd = document.createElement('td');
-                itemsTd.className = 'py-2 px-4 text-sm text-navy';
+                try {
+                    const amt = Number(transaction.total) || 0;
+                    const mthd = (transaction.paymentMethod || "Other").trim();
+                    
+                    // Tally the money
+                    if (mthd.toLowerCase().includes("cash")) tally["Cash"] += amt;
+                    else if (mthd.toLowerCase().includes("card") || mthd.toLowerCase().includes("square")) tally["Card"] += amt;
+                    else if (mthd.toLowerCase().includes("redemption")) tally["Redemption"] += amt;
+                    else tally["Other"] += amt;
 
-                const itemsArray = Array.isArray(transaction.items) ? transaction.items : [];
-                const itemCounts = itemsArray.reduce((acc, item) => {
-                    const itemName = typeof item === 'object' ? item.name : item;
-                    acc[itemName] = (acc[itemName] || 0) + 1;
-                    return acc;
-                }, {});
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-white border-opacity-20 last:border-b-0 animate-fade-in';
+                    
+                    const dateTd = document.createElement('td');
+                    dateTd.className = 'py-2 px-4 text-navy text-sm';
+                    dateTd.textContent = transaction.date || "Unknown";
+                    
+                    const itemsTd = document.createElement('td');
+                    itemsTd.className = 'py-2 px-4 text-sm text-navy';
+                    const itemsArray = Array.isArray(transaction.items) ? transaction.items : [];
+                    const itemCounts = itemsArray.reduce((acc, item) => {
+                        if (!item) return acc;
+                        const itemName = (typeof item === 'object' ? item.name : item) || "Item";
+                        acc[itemName] = (acc[itemName] || 0) + 1;
+                        return acc;
+                    }, {});
+                    itemsTd.textContent = Object.keys(itemCounts).map(name => `${name} x${itemCounts[name]}`).join(', ');
 
-                itemsTd.textContent = Object.keys(itemCounts)
-                    .map(item => `${item} x${itemCounts[item]}`)
-                    .join(', ');
+                    const totalTd = document.createElement('td');
+                    totalTd.className = 'py-2 px-4 font-bold text-navy text-right';
+                    const rawMethod = transaction.paymentMethod || "Not Specified";
+                    const method = rawMethod.trim().toLowerCase();
+                    
+                    let icon = "❓"; 
+                    if (method.includes("cash")) icon = "💵";
+                    else if (method.includes("card") || method.includes("square")) icon = "💳";
+                    else if (method.includes("redemption") || method.includes("ticket")) icon = "🎟️";
 
-                // 3. Total Column (with safe icons)
-                const totalTd = document.createElement('td');
-                totalTd.className = 'py-2 px-4 font-bold text-navy';
-                
-                const method = transaction.paymentMethod || "Not Specified";
-                let icon = "❓"; 
+                    totalTd.innerHTML = `
+                        <div class="flex items-center justify-end gap-3">
+                            <span>$${(Number(transaction.total) || 0).toFixed(2)}</span>
+                            <span class="text-lg" title="${rawMethod}">${icon}</span>
+                        </div>
+                    `;
 
-                if (method === "Cash") icon = "💵";
-                else if (method === "Card") icon = "💳";
-                else if (method === "Redemption") icon = "🎟️";
+                    const actionTd = document.createElement('td');
+                    actionTd.className = 'py-2 px-4 text-right';
 
-                totalTd.innerHTML = `
-                    <div class="flex items-center justify-end gap-3">
-                        <span>$${(Number(transaction.total) || 0).toFixed(2)}</span>
-                        <span class="text-lg" title="${method}">${icon}</span>
-                    </div>
-                `;
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.innerHTML = '🗑️';
+                    deleteBtn.className = 'p-2 transition-all cursor-pointer opacity-70 hover:opacity-100 hover:scale-110';
 
-                // 4. Delete Column
-                const actionTd = document.createElement('td');
-                actionTd.className = 'py-2 px-4 text-right';
+                    // 🛡️ THE DOUBLE-CLICK SAFETY LOCK
+                    let clickCount = 0;
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation(); // Prevent row click events
+                        clickCount++;
 
-                const deleteBtn = document.createElement('button');
-                deleteBtn.innerHTML = '🗑️';
-                deleteBtn.className = 'p-2 transition-all cursor-pointer opacity-70 hover:opacity-100 hover:scale-110';
+                        if (clickCount === 1) {
+                            // FIRST CLICK: Change the button appearance
+                            deleteBtn.innerHTML = '⚠️ Confirm?';
+                            deleteBtn.classList.add('text-red-600', 'font-bold', 'scale-110');
+                            
+                            // Reset if they chicken out after 3 seconds
+                            setTimeout(() => {
+                                clickCount = 0;
+                                deleteBtn.innerHTML = '🗑️';
+                                deleteBtn.classList.remove('text-red-600', 'font-bold', 'scale-110');
+                            }, 3000);
+                        } else {
+                            // SECOND CLICK: Actually fire the delete
+                            window.deleteTransaction(transaction.id);
+                            clickCount = 0; // Reset
+                        }
+                    };
 
-                let clickCount = 0;
-                deleteBtn.onclick = (e) => {
-                    e.stopPropagation(); // Prevent row click events
-                    clickCount++;
-                    if (clickCount === 1) {
-                        deleteBtn.innerHTML = '⚠️ Confirm?';
-                        deleteBtn.classList.add('text-red-500', 'font-bold', 'scale-110');
-                        setTimeout(() => {
-                            clickCount = 0;
-                            deleteBtn.innerHTML = '🗑️';
-                            deleteBtn.classList.remove('text-red-500', 'font-bold', 'scale-110');
-                        }, 3000);
-                    } else {
-                        window.deleteTransaction(transaction.id);
-                    }
-                };
-
-                actionTd.appendChild(deleteBtn);
-                
-                tr.appendChild(dateTd);
-                tr.appendChild(itemsTd);
-                tr.appendChild(totalTd);
-                tr.appendChild(actionTd);
-                transactionsTableBody.appendChild(tr);
+                    actionTd.appendChild(deleteBtn);
+                    
+                    tr.appendChild(dateTd); tr.appendChild(itemsTd); tr.appendChild(totalTd); tr.appendChild(actionTd);
+                    transactionsTableBody.appendChild(tr);
+                    renderBreakdownPills(tally);
+                } catch (err) {
+                    console.error("Row render failed:", err);
+                }
             });
         }
 
         //Delete Transaction function
         window.deleteTransaction = async function(docId) {
-            if (!isAuthenticated) {
-                // Find if it's a sandbox sale (we don't delete ghost data, usually)
-                const initialLength = sandboxHistory.length;
-                sandboxHistory = sandboxHistory.filter(t => t.id !== docId);
-                
-                if (sandboxHistory.length < initialLength) {
-                    updateAuthUI(); // Refresh the totals and table
-                    showModal("Test Sale removed!");
-                } else {
-                    // If it wasn't a sandbox sale, it might be a ghost sale
-                    showModal("Demo items cannot be deleted.");
-                }
-                return; // Stop here!
+            // 1. GHOST PROTECTION
+            if (typeof docId === 'string' && docId.startsWith('ghost')) {
+                showModal("Demo items cannot be deleted.");
+                return;
             }
-            
+
+            if (!isAuthenticated) {
+                // 2. SANDBOX DELETE (With Duck Revival)
+                // Find the sale first so we can see what ducks to "un-sell"
+                const saleToUndo = sandboxHistory.find(t => t.id === docId);
+
+                if (saleToUndo && saleToUndo.items) {
+                    saleToUndo.items.forEach(item => {
+                        if (item.groupId && item.slot && window.sandboxSoldDucks?.[item.groupId]) {
+                            // Remove the sold flag from local memory
+                            delete window.sandboxSoldDucks[item.groupId][`${item.slot}_sold`];
+                            
+                            // Cleanup empty groups
+                            if (Object.keys(window.sandboxSoldDucks[item.groupId]).length === 0) {
+                                delete window.sandboxSoldDucks[item.groupId];
+                            }
+                        }
+                    });
+                }
+
+                sandboxHistory = sandboxHistory.filter(t => t.id !== docId);
+                updateAuthUI();
+                showModal("✨ Test sale removed & Duck revived!");
+                return; 
+            }
+
+            // 3. LIVE MODE (With Firebase Duck Revival)
             try {
                 const transRef = doc(db, "sales", docId);
                 const transSnap = await getDoc(transRef);
                 
                 if (transSnap.exists()) {
                     const data = transSnap.data();
-                    // Restoration logic for sold ducks
+                    // Loop through live items and set sold status to FALSE
                     if (data.items && Array.isArray(data.items)) {
                         for (const item of data.items) {
                             if (item.groupId && item.slot) {
                                 const soldRef = doc(db, "artifacts", appId, "public", "data", "soldDucks", item.groupId);
-                                await setDoc(soldRef, { [`${item.slot}_sold`]: false }, { merge: true });
+                                // Merge: false/null would wipe the doc, so we specifically set the slot to false
+                                await setDoc(soldRef, { 
+                                    [`${item.slot}_sold`]: false 
+                                }, { merge: true });
                             }
                         }
                     }
                 }
 
                 await deleteDoc(transRef);
-                showModal("Sale deleted and items restored!"); // Uses your new Toast!
+                showModal("✨ Live sale deleted & Duck restored!"); 
+
             } catch (error) {
-                console.error("Error deleting:", error);
-                showModal("Error: Could not delete.");
+                console.error("Live delete failed:", error);
+                showModal("Error: Could not delete record.");
             }
         };
-
-        //Filter and Sort functions
-        // 1. Global State
-        let lastFetchedHistory = [];
-        let currentSortColumn = 'date';
-        let currentSortOrder = 'desc';
 
         // 2. Attach the toggleSort to window
         window.toggleSort = function(column) {
@@ -1341,66 +1354,77 @@
             window.applyReportFilters(); 
         };
 
-        window.applyReportFilters = function() {
-            // 1. DATA SELECTOR: Strictly exclusive based on mode
-            let sourceData = isAuthenticated ? [...lastFetchedHistory] : [...sandboxHistory, ...ghostSales];
-            let filtered = [...sourceData];
+        window.applyReportFilters = function(manualData) {
+            let dataToFilter = manualData || (isAuthenticated ? lastFetchedHistory : [...sandboxHistory, ...ghostSales]);
 
-            // 2. THE GUARD: Find the filter elements
-            const dateEl = document.getElementById('filter-date');
-            const startEl = document.getElementById('start-time');
-            const endEl = document.getElementById('end-time');
+            const dateInput = document.getElementById('filter-date')?.value;
+            const startTimeInput = document.getElementById('start-time')?.value;
+            const endTimeInput = document.getElementById('end-time')?.value;
 
-            // IF these don't exist (you aren't on the Sales screen), skip filtering but STILL update UI
-            if (!dateEl || !startEl || !endEl) {
-                updateSearchDashboard(filtered); 
-                renderTransactionTable(filtered.slice(0, 10));
-                return; 
-            }
+            const isSearching = dateInput || startTimeInput || endTimeInput;
 
-            // 3. ACTUAL FILTERING (Only runs if elements exist)
-            const filterDate = dateEl.value;
-            const startTime = startEl.value;
-            const endTime = endEl.value;
+            let filtered = dataToFilter.filter(t => {
+                if (!isSearching) return true;
+                
+                // --- 1. THE DATE OBJECT FIX ---
+                // Use timestamp if it exists, otherwise reconstruct from the pretty string
+                const currentYear = new Date().getFullYear();
+                const transactionDate = t.timestamp ? new Date(t.timestamp) : new Date(`${t.date}, ${currentYear}`);
 
-            if (filterDate || startTime || endTime) {
-                const targetDate = filterDate || new Date().toLocaleDateString('en-CA');
-                filtered = filtered.filter(trans => {
-                    if (!trans.fullDate) return false;
-                    const transDateStr = trans.fullDate.toLocaleDateString('en-CA');
-                    if (transDateStr !== targetDate) return false;
+                // --- 2. THE SMART DATE COMPARISON ---
+                let targetYear, targetMonth, targetDay;
+                if (dateInput) {
+                    const [y, m, d] = dateInput.split('-').map(Number);
+                    targetYear = y; targetMonth = m; targetDay = d;
+                } else {
+                    const now = new Date();
+                    targetYear = now.getFullYear(); targetMonth = now.getMonth() + 1; targetDay = now.getDate();
+                }
 
-                    if (startTime || endTime) {
-                        const transTimeStr = trans.fullDate.toTimeString().slice(0, 5);
-                        if (startTime && transTimeStr < startTime) return false;
-                        if (endTime && transTimeStr > endTime) return false;
+                if (transactionDate.getFullYear() !== targetYear || 
+                    transactionDate.getMonth() + 1 !== targetMonth || 
+                    transactionDate.getDate() !== targetDay) {
+                    return false;
+                }
+
+                // --- 3. THE TIME RANGE (1:52 AM Fix) ---
+                if (startTimeInput || endTimeInput) {
+                    const tMinutes = transactionDate.getHours() * 60 + transactionDate.getMinutes();
+                    if (startTimeInput) {
+                        const [sH, sM] = startTimeInput.split(':').map(Number);
+                        if (tMinutes < (sH * 60 + sM)) return false;
                     }
-                    return true;
-                });
-            }
+                    if (endTimeInput) {
+                        const [eH, eM] = endTimeInput.split(':').map(Number);
+                        if (tMinutes > (eH * 60 + eM)) return false;
+                    }
+                }
+                return true;
+            });
 
-            // 4. SORT & RENDER
+            // 4. THE SORTING BRAIN (Fixing the Flip)
             filtered.sort((a, b) => {
-                let valA = currentSortColumn === 'date' ? a.fullDate : a.total;
-                let valB = currentSortColumn === 'date' ? b.fullDate : b.total;
+                let valA, valB;
+                if (currentSortColumn === 'total') {
+                    valA = Number(a.total) || 0; valB = Number(b.total) || 0;
+                } else {
+                    const yr = new Date().getFullYear();
+                    valA = a.timestamp || new Date(`${a.date}, ${yr}`).getTime() || 0;
+                    valB = b.timestamp || new Date(`${b.date}, ${yr}`).getTime() || 0;
+                }
                 return currentSortOrder === 'desc' ? valB - valA : valA - valB;
             });
 
-            updateSearchDashboard(filtered);
-            renderTransactionTable(filtered.slice(0, 10));
-        };
-
-        // HELPER: Keep the search count/total in sync without crashing
-        function updateSearchDashboard(data) {
-            const sTotal = data.reduce((sum, t) => sum + (Number(t.total) || 0), 0);
-            const sCount = data.length;
-            
+            // 5. UPDATE UI
+            const sTotal = filtered.reduce((sum, t) => sum + (Number(t.total) || 0), 0);
             const sTotalEl = document.getElementById('search-total-revenue');
             const sCountEl = document.getElementById('search-total-count');
             
             if (sTotalEl) sTotalEl.textContent = `$${sTotal.toFixed(2)}`;
-            if (sCountEl) sCountEl.textContent = sCount;
-        }
+            if (sCountEl) sCountEl.textContent = filtered.length;
+
+            renderTransactionTable(filtered);
+        };
 
         //Silent Auction Functions
         window.openAuctionModal = function() {
@@ -1628,7 +1652,127 @@
             e.preventDefault();
             showView(itemsView);
         });
-        
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Start the database listener ONCE when the app opens
+            setupSalesDataListener(); 
+            
+            // Draw the initial Sandbox UI
+            updateAuthUI(); 
+        });
+
+        window.exportToCSV = function() {
+            let csvContent = "Date/Time,Items,Payment Method,Total Amount\n";
+            const rows = document.querySelectorAll('#transactions-table-body tr');
+            
+            if (rows.length === 0 || rows[0].innerText.includes("No transactions")) {
+                alert("No data available to export!");
+                return;
+            }
+
+            rows.forEach(tr => {
+                const cells = tr.querySelectorAll('td');
+                if (cells.length >= 3) {
+                    // FIX 1: Grab the date from the first table cell (cells[0])
+                    // We use the "\t" trick to force Excel to show the full date string
+                    const dateText = cells[0].innerText.trim();
+                    const date = `"\t${dateText}"`; 
+
+                    const items = `"${cells[1].innerText.trim().replace(/"/g, '""')}"`;
+                    
+                    // Detect method by looking at the emoji/icon in Cell 2
+                    let method = "Not Specified";
+                    const methodCellText = cells[2].innerText;
+                    if (methodCellText.includes('💵')) method = "Cash";
+                    else if (methodCellText.includes('💳')) method = "Card";
+                    else if (methodCellText.includes('🎟️')) method = "Redemption";
+                    
+                    // FIX 2: Better Amount Cleaning
+                    // This removes symbols like $ but KEEPS the decimal point
+                    const amountOnly = `"${cells[2].innerText.replace(/[^\d.]/g, '')}"`;
+                    
+                    csvContent += `${date},${items},"${method}",${amountOnly}\n`;
+                }
+            });
+
+            const totalRev = document.getElementById('search-total-revenue')?.textContent || "$0.00";
+            csvContent += `\n"SUMMARY",,,"Total: ${totalRev.replace('$', '')}"\n`;
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `Festival_Sales_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        window.exportInventoryToCSV = function() {
+            let csvContent = "Item Name,Total Quantity Sold,Total Revenue\n";
+            let data = isAuthenticated ? [...lastFetchedHistory] : [...sandboxHistory, ...ghostSales];
+
+            if (!data || data.length === 0) {
+                alert("No sales data found to analyze.");
+                return;
+            }
+
+            let itemTally = {};
+
+            data.forEach(sale => {
+                // Handle both Live (Array) vs Sandbox (String)
+                let itemsForThisSale = [];
+                if (Array.isArray(sale.items)) {
+                    itemsForThisSale = sale.items; // Live data is already objects
+                } else if (typeof sale.items === 'string') {
+                    // Sandbox fallback: turn "Hat x1, Duck x1" into objects
+                    itemsForThisSale = sale.items.split(',').map(str => {
+                        const match = str.trim().match(/(.+)\s+x\s*(\d+)/i);
+                        return match ? { name: match[1].trim(), quantity: parseInt(match[2]), price: (Number(sale.total) / 2) } : null;
+                    }).filter(Boolean);
+                }
+
+                itemsForThisSale.forEach(item => {
+                    const name = item.name || "Unknown Item";
+                    const qty = Number(item.quantity) || 1;
+                    
+                    // THE CRITICAL FIX: Use the item's individual price if it exists
+                    // If not, we fall back to (Total / Number of Items)
+                    const itemPrice = Number(item.price) || (Number(sale.total) / itemsForThisSale.length);
+                    const revenueValue = itemPrice * qty;
+
+                    if (!itemTally[name]) {
+                        itemTally[name] = { qty: 0, revenue: 0 };
+                    }
+                    itemTally[name].qty += qty;
+                    itemTally[name].revenue += revenueValue;
+                });
+            });
+
+            // Generate clean CSV Rows
+            Object.keys(itemTally).sort().forEach(name => {
+                const stats = itemTally[name];
+                csvContent += `"${name}",${stats.qty},"${stats.revenue.toFixed(2)}"\n`;
+            });
+
+            downloadCSV(csvContent, "Inventory_Analysis");
+        };
+
+        function downloadCSV(content, prefix) {
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const dateStr = new Date().toLocaleDateString().replace(/\//g, '-');
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${prefix}_${dateStr}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+                
         // --- Main App Initialization ---
         async function initApp() {
             loadingState.classList.remove('hidden');

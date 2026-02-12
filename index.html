@@ -293,6 +293,18 @@
                 </div>
 
                 <div class="flex flex-col items-center gap-1">
+                    <span class="text-[10px] font-black text-navy opacity-40 uppercase tracking-widest">Discount %</span>
+                    <div class="flex items-center gap-2">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="discount-toggle" class="sr-only peer">
+                            <div class="w-10 h-5 bg-gray-300 rounded-full peer peer-checked:bg-gold after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:h-4 after:w-4 after:rounded-full after:transition-all peer-checked:after:translate-x-full"></div>
+                        </label>
+                        <input type="number" id="discount-percent" value="10" min="0" max="100"
+                            class="w-10 bg-transparent border-b-2 border-navy text-navy font-black text-center outline-none text-sm">
+                    </div>
+                </div>
+
+                <div class="flex flex-col items-center gap-1">
                     <span class="text-[10px] font-black text-navy opacity-40 uppercase tracking-widest">Environment</span>
                     <div class="flex items-center gap-2">
                         <span class="text-[9px] font-bold text-navy uppercase" id="mode-label">Testing</span>
@@ -439,6 +451,31 @@
         </div>
     </div>
 
+    <!--Modal for Custom Item-->
+    <div id="custom-item-modal" class="fixed inset-0 bg-navy bg-opacity-80 flex items-center justify-center p-4 z-[60] hidden">
+        <div class="bg-white p-8 rounded-[3rem] shadow-2xl max-w-md w-full border-4 border-navy">
+            <h2 class="text-3xl font-black text-navy mb-6 italic uppercase text-center">Custom Store Item</h2>
+        
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-navy font-bold mb-1 ml-2">Item Name</label>
+                    <input type="text" id="custom-item-name" placeholder="e.g., Hadestown Poster" 
+                        class="w-full p-4 rounded-full border-2 border-navy focus:border-gold outline-none font-bold text-navy">
+                </div>
+                <div>
+                    <label class="block text-navy font-bold mb-1 ml-2">Price ($)</label>
+                    <input type="number" id="custom-item-price" placeholder="0.00" step="0.01"
+                    class="w-full p-4 rounded-full border-2 border-navy focus:border-gold outline-none font-bold text-navy">
+                </div>
+            </div>
+
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeCustomItemModal()" class="flex-1 bg-gray-200 text-navy font-black py-3 rounded-full hover:bg-gray-300 transition-all">Cancel</button>
+                <button onclick="addCustomItemToCart()" class="flex-1 bg-navy text-white font-black py-3 rounded-full hover:bg-blue-900 transition-all">Add to Cart</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal for Duck View-->
     <div id="duck-modal" class="fixed inset-0 bg-navy bg-opacity-90 flex items-center justify-center p-4 z-[70] hidden">
     <div class="bg-sto-blue p-8 rounded-[3rem] shadow-2xl max-w-2xl w-full border-4 border-gold flex flex-col max-h-[90vh]">
@@ -511,23 +548,49 @@
 
         // --- State Variables ---
         const products = [
-            { name: "Accessories", price: 2.00 },
-            { name: "Posters", price: 10.00 },
-            { name: "Tote Bag", price: 15.00 },
-            { name: "Stickers", price: 1.00 },
-            { name: "Pens", price: 1.00 },
-            { name: "Hats", price: 2.00 },
-            { name: "Friendship Bracelets", price: 2.00 },
-            { name: "Playbills", price: 5.00 },
-            { name: "Pouches", price: 10.00 },
-            { name: "Tattoos", price: 1.00 },
-            { name: "Stage Door Sign", price: 5.00 },
-            { name: "Julius Caesar Pen Holder", price: 3.00 },
-            { name: "Signed Playbill", price: 15.00 },
-            { name: "Blanket", price: 15.00 },
-            { name: "Makeup Faces", price: 25.00 },
-            { name: "Hadestown Coloring Pages", price: 5.00 },
-            { name: "Postcards", price: 2.00 }
+            // --- Apparel & Totes ---
+            { name: "Theatre Hoodie", price: 50.00 },
+            { name: "Hamilton Sweatshirt", price: 35.00 },
+            { name: "Epic Saga Sweatshirt", price: 40.00 },
+            { name: "Epic T-Shirt", price: 30.00 },
+            { name: "In My Theatre Era Tote", price: 20.00 },
+            { name: "Outsiders Tote", price: 28.00 },
+            { name: "Wicked Tote", price: 30.00 },
+            { name: "Broadway Alphabet Tote", price: 25.00 },
+            { name: "Eat Sleep Repeat Tote", price: 20.00 },
+            { name: "Bulk Theatre Tote", price: 10.00 },
+            { name: "Theatre Blanket", price: 15.00 },
+            { name: "Movie Clapboard Blanket", price: 25.00 },
+            { name: "Turelos Theatre Blanket", price: 35.00 },
+
+            // --- Props & Small Gifts ---
+            { name: "Director Hat", price: 20.00 },
+            { name: "Top Hat", price: 30.00 },
+            { name: "Cowboy Hat", price: 3.00 },
+            { name: "Chunky Silver Ring", price: 5.00 },
+            { name: "Theatre Socks (6pk)", price: 5.00 },
+            { name: "Theatre Pin", price: 2.00 },
+            { name: "Drama Mask Keychain", price: 2.00 },
+            { name: "Musical Note Keychain", price: 2.00 },
+            { name: "Liquid Timer Keychain", price: 2.00 },
+            { name: "Theatre Makeup Bag", price: 10.00 },
+
+            // --- Posters & Decor ---
+            { name: "Hamilton Poster (4pk)", price: 15.00 },
+            { name: "Hadestown/Wicked Poster", price: 25.00 }, // Locked at $25
+            { name: "Standard Poster", price: 14.00 },
+            { name: "100 Shows Scratch-Off", price: 25.00 },
+            { name: "Broadway Metal Sign", price: 24.00 },
+            { name: "Stage Door Sign", price: 20.00 },
+
+            // --- Fun & Fidgets ---
+            { name: "Squishy Mochi", price: 1.00 },
+            { name: "Stress Cube/Ball", price: 3.00 }, // Locked at $3
+            { name: "Mini Art Set", price: 5.00 },
+            { name: "Dragon Egg", price: 5.00 },
+            { name: "Crystal Tree", price: 4.00 },
+            { name: "Stickers (1 or 3-pack)", price: 1.00 }, // $1 minimum logic
+            
         ];
         
         let lastFetchedHistory = [];
@@ -756,34 +819,39 @@
         };
 
         window.addSingleDuckToCart = function(groupId, duckName, slot, category) {
-            // 1. Get the normal price
             let price = duckPrices[category] || 2.00;
             
-            // 2. Check the toggle
             const redemptionToggle = document.getElementById('redemption-toggle');
-            const isRedemption = redemptionToggle ? redemptionToggle.checked : false;
+            const discountToggle = document.getElementById('discount-toggle');
+            const discountPercent = parseFloat(document.getElementById('discount-percent')?.value) || 0;
 
-            // 3. Override price if toggle is active
+            const isRedemption = redemptionToggle ? redemptionToggle.checked : false;
+            const isDiscount = discountToggle ? discountToggle.checked : false;
+
+            let finalName = `${category}: ${duckName}`;
+
             if (isRedemption) {
                 price = 0;
+            } else if (isDiscount) {
+                price = price * (1 - (discountPercent / 100));
+                finalName += ` (${discountPercent}% Off)`;
             }
 
             currentCart.push({ 
-                name: `${category}: ${duckName}`, 
+                name: finalName, 
                 price: price, 
                 groupId: groupId, 
                 slot: slot,
-                isVoucher: isRedemption // Helps track for the festival audit!
+                isVoucher: isRedemption,
+                isDiscounted: isDiscount
             });
 
             currentTotal += price;
             updateCartDisplay();
             closeDuckModal();
 
-            // 4. Auto-reset toggle so the next sale isn't accidentally $0
-            if (isRedemption && redemptionToggle) {
-                redemptionToggle.checked = false;
-            }
+            if (redemptionToggle) redemptionToggle.checked = false;
+            if (discountToggle) discountToggle.checked = false;
         };
 
         window.completeSale = completeSale;
@@ -853,32 +921,50 @@
             auctionBtn.onclick = () => openAuctionModal();
             productListEl.appendChild(auctionBtn);
 
+            const customItemBtn = document.createElement('button');
+            customItemBtn.className = 'bg-navy text-white p-4 h-28 rounded-[1.5rem] shadow-lg hover:bg-blue-900 transition-all active:scale-95 flex flex-col items-center justify-center border-2 border-gold';
+            customItemBtn.innerHTML = `
+                <span class="text-sm font-bold leading-tight uppercase tracking-wide">Custom Item</span>
+                <span class="text-xl font-black mt-1">Manual $</span>
+            `;
+            customItemBtn.onclick = () => openCustomItemModal();
+            productListEl.appendChild(customItemBtn);
+
         }
 
         function addItemToCart(product) {
-            // 1. Grab the toggle element
             const redemptionToggle = document.getElementById('redemption-toggle');
-            const isRedemption = redemptionToggle ? redemptionToggle.checked : false;
+            const discountToggle = document.getElementById('discount-toggle');
+            const discountPercent = parseFloat(document.getElementById('discount-percent')?.value) || 0;
 
-            // 2. Create a "cart instance" of the product
-            // We use the spread operator (...) to avoid changing the original product price
+            const isRedemption = redemptionToggle ? redemptionToggle.checked : false;
+            const isDiscount = discountToggle ? discountToggle.checked : false;
+
+            let finalPrice = product.price;
+            let finalName = product.name;
+
+            if (isRedemption) {
+                finalPrice = 0;
+            } else if (isDiscount) {
+                finalPrice = product.price * (1 - (discountPercent / 100));
+                finalName = `${product.name} (${discountPercent}% Off)`;
+            }
+
             const itemToAdd = { 
                 ...product, 
-                price: isRedemption ? 0 : product.price,
-                isVoucher: isRedemption // Useful for later reporting!
+                name: finalName,
+                price: finalPrice,
+                isVoucher: isRedemption,
+                isDiscounted: isDiscount
             };
 
-            // 3. Update the cart and total
             currentCart.push(itemToAdd);
             currentTotal += itemToAdd.price;
-
-            // 4. UI Refresh
             updateCartDisplay();
 
-            // 5. Optional: Auto-reset toggle so the next item isn't accidentally $0
-            if (isRedemption && redemptionToggle) {
-                redemptionToggle.checked = false;
-            }
+            // AUTO-RESET: Clears both toggles after adding to prevent accidental repeats
+            if (redemptionToggle) redemptionToggle.checked = false;
+            if (discountToggle) discountToggle.checked = false;
         }
 
         function removeItemFromCart(index) {
@@ -1457,6 +1543,38 @@
     
             updateCartDisplay();
             closeAuctionModal();
+        };
+
+        // Custom Item Functions
+        window.openCustomItemModal = function() {
+            document.getElementById('custom-item-modal').classList.remove('hidden');
+            document.getElementById('custom-item-name').focus();
+        };
+
+        window.closeCustomItemModal = function() {
+            document.getElementById('custom-item-modal').classList.add('hidden');
+            document.getElementById('custom-item-name').value = '';
+            document.getElementById('custom-item-price').value = '';
+        };
+
+        window.addCustomItemToCart = function() {
+            const nameInput = document.getElementById('custom-item-name');
+            const priceInput = document.getElementById('custom-item-price');
+
+            const name = nameInput.value.trim() || "Custom Item";
+            const price = parseFloat(priceInput.value);
+
+            if (isNaN(price) || price < 0) {
+                alert("Please enter a valid price.");
+                return;
+            }
+
+            // Add to cart logic
+            currentCart.push({ name: name, price: price });
+            currentTotal += price;
+
+            updateCartDisplay();
+            closeCustomItemModal();
         };
 
         //Items Page Render

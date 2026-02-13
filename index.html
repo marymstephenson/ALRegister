@@ -518,7 +518,10 @@
 
         let app, db, auth;
         let userId = 'unknown';
-        let duckPrices = { "Regular": 2.00, "Valentines": 3.00, "Glitter": 3.00, "Light-Up": 5.00 }; // Your starting defaults        
+        const duckPrices = {
+            "Normal": 2.00,
+            "Cowboy": 5.00
+        };
         let currentSortColumn = 'date'; // Default to newest
         let isAscending = false;        // Default to newest at the top
         
@@ -566,7 +569,7 @@
             // --- Props & Small Gifts ---
             { name: "Director Hat", price: 20.00 },
             { name: "Top Hat", price: 30.00 },
-            { name: "Cowboy Hat", price: 3.00 },
+            { name: "Cowboy Hat", price: 5.00 },
             { name: "Chunky Silver Ring", price: 5.00 },
             { name: "Theatre Socks (6pk)", price: 5.00 },
             { name: "Theatre Pin", price: 2.00 },
@@ -1014,8 +1017,8 @@
         let celebrationTimer = null;
 
         const ghostSales = [
-            { items: [{ name: "Standard Duck", price: 3, cat: "Regular" }], total: 3, paymentMethod: "Cash", date: "2/14 12:00pm", fullDate: new Date() },
-            { items: [{ name: "Valentines Duck", price: 5, cat: "Valentines" }], total: 5, paymentMethod: "Cash", date: "2/14 12:00pm", fullDate: new Date()},
+            { items: [{ name: "Regular Duck", price: 3, cat: "Regular" }], total: 3, paymentMethod: "Cash", date: "2/14 12:00pm", fullDate: new Date() },
+            { items: [{ name: "Cowboy Duck", price: 5, cat: "Valentines" }], total: 5, paymentMethod: "Cash", date: "2/14 12:00pm", fullDate: new Date()},
             { items: [{ name: "Batman Auction Item", price: 50, isAuction: true }], total: 50, paymentMethod: "Card", date: "2/14 12:00pm", fullDate: new Date()},
             { items: [{ name: "STO Tote Bag", price: 15 }], total: 15, paymentMethod: "Card", date: "2/14 12:00pm", fullDate: new Date()}
         ];
@@ -1585,10 +1588,8 @@
 
             // 1. Data Buckets
             const duckGroups = {
-                "Regular": { name: "Regular Ducks", qty: 0, rev: 0 },
-                "Valentines": { name: "Valentines Ducks", qty: 0, rev: 0 },
-                "Glitter": { name: "Glitter Ducks", qty: 0, rev: 0 },
-                "Light-Up": { name: "Light-Up Ducks", qty: 0, rev: 0 }
+                "Normal": { name: "Normal Ducks", qty: 0, rev: 0 },
+                "Cowboy": { name: "Cowboy Ducks", qty: 0, rev: 0 }
             };
             let totalDuckQty = 0, totalDuckRev = 0;
 
@@ -1606,9 +1607,7 @@
                     const cat = item.cat || "";
                     const lowerName = name.toLowerCase();
                     const isDuck = cat.includes("Duck") || lowerName.includes("duck") || 
-                        lowerName.startsWith("regular:") || lowerName.startsWith("valentines:") || 
-                        lowerName.startsWith("glitter:") || lowerName.startsWith("light-up:");
-
+                                     lowerName.startsWith("normal:") || lowerName.startsWith("cowboy:");
 
                     // A. IS IT AN AUCTION ITEM?
                     if (name.toLowerCase().includes("auction") || item.isAuction) {
@@ -1620,20 +1619,16 @@
                     } 
                     // B. IS IT A DUCK?
                     else if (isDuck) {
-                        
                         totalDuckQty++;
                         totalDuckRev += price;
 
-                        // Use a more aggressive match for the sub-buckets
                         const lowerName = name.toLowerCase();
-                        if (lowerName.includes("valentine")) {
-                            duckGroups["Valentines"].qty++; duckGroups["Valentines"].rev += price;
-                        } else if (lowerName.includes("glitter")) {
-                            duckGroups["Glitter"].qty++; duckGroups["Glitter"].rev += price;
-                        } else if (lowerName.includes("light") || lowerName.includes("glow")) {
-                            duckGroups["Light-Up"].qty++; duckGroups["Light-Up"].rev += price;
+                        if (lowerName.includes("cowboy")) {
+                            duckGroups["Cowboy"].qty++; 
+                            duckGroups["Cowboy"].rev += price;
                         } else {
-                            duckGroups["Regular"].qty++; duckGroups["Regular"].rev += price;
+                            duckGroups["Normal"].qty++; 
+                            duckGroups["Normal"].rev += price;
                         }
                     }
                     // C. EVERYTHING ELSE (Totes, Stickers, etc.)
@@ -1960,10 +1955,8 @@
         }
 
         const categoryConfigs = [
-            { file: 'Duck Duos 2025 - Regular Ducks.csv', cat: 'Regular', price: 2.00 },
-            { file: 'Duck Duos 2025 - Valentines Ducks.csv', cat: 'Valentines', price: 3.00 },
-            { file: 'Duck Duos 2025 - Glitter Ducks.csv', cat: 'Glitter', price: 3.00 },
-            { file: 'Duck Duos 2025 - Light-Up Ducks.csv', cat: 'Light-Up', price: 5.00 }
+            { file: 'duos-normal.csv', cat: 'Normal', price: 2.00 },
+            { file: 'duos-cowboy.csv', cat: 'Cowboy', price: 5.00 }
         ];
 
 
